@@ -1,0 +1,16 @@
+# Misc
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Secrets
+*.env
+*.local

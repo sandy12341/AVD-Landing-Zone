@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "deploymentPrefix": { "value": "avd1" },
+    "environment": { "value": "dev" },
+    "sessionHostCount": { "value": 1 },
+    "vmSize": { "value": "Standard_D2ads_v5" },
+    "hostPoolType": { "value": "Pooled" },
+    "adminUsername": { "value": "avdadmin" },
+    "deployFSLogix": { "value": true },
+    "deployMonitoring": { "value": true },
+    "vnetAddressPrefix": { "value": "10.20.0.0/16" },
+    "sessionHostSubnetPrefix": { "value": "10.20.1.0/24" },
+    "privateEndpointSubnetPrefix": { "value": "10.20.2.0/24" }
+  }
+}

@@ -1,0 +1,140 @@
+// ─────────────────────────────────────────────────────────────────────
+// Azure Virtual Desktop + Landing Zone — Main Deployment
+// Deploys: VNet, Host Pool, Workspace, Session Hosts (Entra ID join),
+//          FSLogix storage, and Log Analytics monitoring
+// ─────────────────────────────────────────────────────────────────────
+
+targetScope = 'resourceGroup'
+
+// ── Parameters ──
+
+@description('Azure region for all resources')
+param location string = resourceGroup().location
+
+@description('Deployment prefix used for naming')
+@maxLength(6)
+param deploymentPrefix string = 'avd1'
+
+@description('Environment name')
+@allowed(['dev', 'test', 'prod'])
+param environment string = 'dev'
+
+@description('Number of session host VMs')
+@minValue(1)
+@maxValue(10)
+param sessionHostCount int = 1
+
+@description('VM size for session hosts')
+param vmSize string = 'Standard_D2ads_v5'
+
+@description('Host pool type')
+@allowed(['Personal', 'Pooled'])
+param hostPoolType string = 'Pooled'
+
+@description('Local admin username for session hosts')
+param adminUsername string
+
+@description('Local admin password for session hosts')
+@secure()
+param adminPassword string
+
+@description('Deploy FSLogix profile storage')
+param deployFSLogix bool = true
+
+@description('Deploy monitoring (Log Analytics)')
+param deployMonitoring bool = true
+
+@description('VNet address prefix')
+param vnetAddressPrefix string = '10.20.0.0/16'
+
+@description('Session hosts subnet prefix')
+param sessionHostSubnetPrefix string = '10.20.1.0/24'
+
+@description('Private endpoints subnet prefix')
+param privateEndpointSubnetPrefix string = '10.20.2.0/24'
+
+// ── Variables ──
+
+var namingPrefix = '${deploymentPrefix}-${environment}'
+var tags = {
+  Environment: environment
+  Project: 'AVD-Landing-Zone'
+  DeployedBy: 'Bicep'
+}
+
+// ── Networking ──
+
+module network 'modules/network.bicep' = {
+  name: 'deploy-network'
+  params: {
+    location: location
+    vnetName: 'vnet-avd-${namingPrefix}'
+    vnetAddressPrefix: vnetAddressPrefix
+    sessionHostSubnetPrefix: sessionHostSubnetPrefix
+    privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
+    tags: tags
+  }
+}
+
+// ── Host Pool + Workspace ──
+
+module hostPool 'modules/hostpool.bicep' = {
+  name: 'deploy-hostpool'
+  params: {
+    location: location
+    hostPoolName: 'hp-avd-${namingPrefix}'
+    hostPoolType: hostPoolType
+    workspaceName: 'ws-avd-${namingPrefix}'
+    appGroupName: 'dag-avd-${namingPrefix}'
+    tags: tags
+  }
+}
+
+// ── Session Hosts ──
+
+module sessionHosts 'modules/sessionhosts.bicep' = {
+  name: 'deploy-sessionhosts'
+  params: {
+    location: location
+    sessionHostCount: sessionHostCount
+    vmSize: vmSize
+    subnetId: network.outputs.sessionHostSubnetId
+    hostPoolName: hostPool.outputs.hostPoolName
+    registrationToken: hostPool.outputs.registrationToken
+    adminUsername: adminUsername
+    adminPassword: adminPassword
+    vmNamePrefix: 'vm-avd-${namingPrefix}'
+    tags: tags
+  }
+}
+
+// ── FSLogix Storage ──
+
+module fslogix 'modules/fslogix.bicep' = if (deployFSLogix) {
+  name: 'deploy-fslogix'
+  params: {
+    location: location
+    storageAccountName: replace('stavd${namingPrefix}', '-', '')
+    tags: tags
+  }
+}
+
+// ── Monitoring ──
+
+module monitoring 'modules/monitoring.bicep' = if (deployMonitoring) {
+  name: 'deploy-monitoring'
+  params: {
+    location: location
+    workspaceName: 'log-avd-${namingPrefix}'
+    tags: tags
+  }
+}
+
+// ── Outputs ──
+
+output hostPoolName string = hostPool.outputs.hostPoolName
+output workspaceId string = hostPool.outputs.workspaceId
+output vnetId string = network.outputs.vnetId
+output sessionHostVmNames array = sessionHosts.outputs.vmNames
+output fslogixStorageAccount string = deployFSLogix ? fslogix.outputs.storageAccountName : 'N/A'
+output logAnalyticsWorkspace string = deployMonitoring ? monitoring.outputs.workspaceName : 'N/A'
