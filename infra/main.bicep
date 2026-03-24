@@ -38,10 +38,6 @@ param adminUsername string
 @secure()
 param adminPassword string
 
-@description('Host pool registration token (retrieve via CLI after host pool deploy)')
-@secure()
-param registrationToken string = ''
-
 @description('Deploy FSLogix profile storage')
 param deployFSLogix bool = true
 
@@ -94,9 +90,9 @@ module hostPool 'modules/hostpool.bicep' = {
   }
 }
 
-// ── Session Hosts (requires registrationToken from CLI) ──
+// ── Session Hosts (auto-registered via host pool token) ──
 
-module sessionHosts 'modules/sessionhosts.bicep' = if (!empty(registrationToken)) {
+module sessionHosts 'modules/sessionhosts.bicep' = {
   name: 'deploy-sessionhosts'
   params: {
     location: location
@@ -104,7 +100,7 @@ module sessionHosts 'modules/sessionhosts.bicep' = if (!empty(registrationToken)
     vmSize: vmSize
     subnetId: network.outputs.sessionHostSubnetId
     hostPoolName: hostPool.outputs.hostPoolName
-    registrationToken: registrationToken
+    registrationToken: hostPool.outputs.registrationToken
     adminUsername: adminUsername
     adminPassword: adminPassword
     vmNamePrefix: 'vm-avd-${namingPrefix}'
@@ -139,6 +135,6 @@ module monitoring 'modules/monitoring.bicep' = if (deployMonitoring) {
 output hostPoolName string = hostPool.outputs.hostPoolName
 output workspaceId string = hostPool.outputs.workspaceId
 output vnetId string = network.outputs.vnetId
-output sessionHostVmNames array = !empty(registrationToken) ? sessionHosts.outputs.vmNames : []
+output sessionHostVmNames array = sessionHosts.outputs.vmNames
 output fslogixStorageAccount string = deployFSLogix ? fslogix.outputs.storageAccountName : 'N/A'
 output logAnalyticsWorkspace string = deployMonitoring ? monitoring.outputs.workspaceName : 'N/A'

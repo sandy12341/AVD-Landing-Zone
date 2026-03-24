@@ -142,8 +142,13 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
       type: 'CustomScriptExtension'
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
+      settings: {
+        fileUris: [
+          'https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1'
+        ]
+      }
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -Command "& { $ProgressPreference=\'SilentlyContinue\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH\' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\BootLoader.msi,\'/quiet\',\'/norestart\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv\' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\RDAgent.msi,\'/quiet\',\'/norestart\'; Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue; Stop-Service RdAgent -Force -ErrorAction SilentlyContinue; Start-Sleep 5; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name RegistrationToken -Value \'${registrationToken}\'; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name IsRegistered -Value 0; Start-Service RdAgent; Start-Service RDAgentBootLoader }"'
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -RegistrationToken \'${registrationToken}\''
       }
     }
     dependsOn: [aadJoin[i]]
