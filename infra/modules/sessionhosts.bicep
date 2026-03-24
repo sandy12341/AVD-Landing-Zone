@@ -40,6 +40,9 @@ param tags object = {}
 @description('Name prefix for session hosts')
 param vmNamePrefix string = 'vm-avd'
 
+// Derive a unique short computer name (max 15 chars) from vmNamePrefix
+var shortPrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 12)
+
 resource sessionHosts 'Microsoft.Compute/virtualMachines@2024-07-01' = [
   for i in range(0, sessionHostCount): {
     name: '${vmNamePrefix}-${i}'
@@ -63,7 +66,7 @@ resource sessionHosts 'Microsoft.Compute/virtualMachines@2024-07-01' = [
         imageReference: imageReference
       }
       osProfile: {
-        computerName: 'avdsh${i}'
+        computerName: '${shortPrefix}${i}'
         adminUsername: adminUsername
         adminPassword: adminPassword
         windowsConfiguration: {
@@ -127,7 +130,7 @@ resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
 
 // AVD Agent — install via Custom Script Extension (stable MSI download URLs)
 // Installs BootLoader + RDAgent MSIs, then writes the registration token to the registry
-// and restarts the BootLoader so the agent registers with the host pool.
+// and restarts both services so the agent registers with the host pool.
 resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
   for i in range(0, sessionHostCount): {
     parent: sessionHosts[i]
@@ -140,7 +143,7 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -Command "& { $ProgressPreference=\'SilentlyContinue\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH\' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\BootLoader.msi,\'/quiet\',\'/norestart\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv\' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\RDAgent.msi,\'/quiet\',\'/norestart\'; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name RegistrationToken -Value \'${registrationToken}\'; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name IsRegistered -Value 0; Restart-Service RDAgentBootLoader -Force }"'
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -Command "& { $ProgressPreference=\'SilentlyContinue\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH\' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\BootLoader.msi,\'/quiet\',\'/norestart\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv\' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\RDAgent.msi,\'/quiet\',\'/norestart\'; Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue; Stop-Service RdAgent -Force -ErrorAction SilentlyContinue; Start-Sleep 5; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name RegistrationToken -Value \'${registrationToken}\'; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name IsRegistered -Value 0; Start-Service RdAgent; Start-Service RDAgentBootLoader }"'
       }
     }
     dependsOn: [aadJoin[i]]

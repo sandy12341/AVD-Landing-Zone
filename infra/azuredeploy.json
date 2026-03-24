@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.23.60470",
-      "templateHash": "5779167374457813152"
+      "templateHash": "3740250874672012754"
     }
   },
   "parameters": {
@@ -536,7 +536,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "8325711275496487071"
+              "templateHash": "15899054133242212255"
             }
           },
           "parameters": {
@@ -619,6 +619,9 @@
               }
             }
           },
+          "variables": {
+            "shortPrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 12)]"
+          },
           "resources": [
             {
               "copy": {
@@ -648,7 +651,7 @@
                   "imageReference": "[parameters('imageReference')]"
                 },
                 "osProfile": {
-                  "computerName": "[format('avdsh{0}', range(0, parameters('sessionHostCount'))[copyIndex()])]",
+                  "computerName": "[format('{0}{1}', variables('shortPrefix'), range(0, parameters('sessionHostCount'))[copyIndex()])]",
                   "adminUsername": "[parameters('adminUsername')]",
                   "adminPassword": "[parameters('adminPassword')]",
                   "windowsConfiguration": {
@@ -734,7 +737,7 @@
                 "typeHandlerVersion": "1.10",
                 "autoUpgradeMinorVersion": true,
                 "protectedSettings": {
-                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -Command \"& {{ $ProgressPreference=''SilentlyContinue''; Invoke-WebRequest -Uri ''https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList ''/i'',$env:TEMP\\BootLoader.msi,''/quiet'',''/norestart''; Invoke-WebRequest -Uri ''https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList ''/i'',$env:TEMP\\RDAgent.msi,''/quiet'',''/norestart''; Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent'' -Name RegistrationToken -Value ''{0}''; Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent'' -Name IsRegistered -Value 0; Restart-Service RDAgentBootLoader -Force }}\"', parameters('registrationToken'))]"
+                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -Command \"& {{ $ProgressPreference=''SilentlyContinue''; Invoke-WebRequest -Uri ''https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList ''/i'',$env:TEMP\\BootLoader.msi,''/quiet'',''/norestart''; Invoke-WebRequest -Uri ''https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList ''/i'',$env:TEMP\\RDAgent.msi,''/quiet'',''/norestart''; Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue; Stop-Service RdAgent -Force -ErrorAction SilentlyContinue; Start-Sleep 5; Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent'' -Name RegistrationToken -Value ''{0}''; Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent'' -Name IsRegistered -Value 0; Start-Service RdAgent; Start-Service RDAgentBootLoader }}\"', parameters('registrationToken'))]"
                 }
               },
               "dependsOn": [
