@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.23.60470",
-      "templateHash": "3740250874672012754"
+      "templateHash": "522038761092259448"
     }
   },
   "parameters": {
@@ -334,7 +334,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "8624226990155283037"
+              "templateHash": "1773081255158210200"
             }
           },
           "parameters": {
@@ -428,6 +428,7 @@
                 "friendlyName": "[parameters('hostPoolFriendlyName')]",
                 "validationEnvironment": false,
                 "startVMOnConnect": true,
+                "customRdpProperty": "targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;",
                 "registrationInfo": {
                   "expirationTime": "[dateTimeAdd(parameters('baseTime'), 'PT48H')]",
                   "registrationTokenOperation": "Update"
