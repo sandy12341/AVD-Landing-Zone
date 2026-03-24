@@ -125,34 +125,22 @@ resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
   }
 ]
 
-// AVD Agent extension to register with host pool
+// AVD Agent — install via Custom Script Extension (stable MSI download URLs)
+// Installs BootLoader + RDAgent MSIs, then writes the registration token to the registry
+// and restarts the BootLoader so the agent registers with the host pool.
 resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
   for i in range(0, sessionHostCount): {
     parent: sessionHosts[i]
-    name: 'Microsoft.PowerShell.DSC'
+    name: 'InstallAVDAgent'
     location: location
     tags: tags
     properties: {
-      publisher: 'Microsoft.Powershell'
-      type: 'DSC'
-      typeHandlerVersion: '2.73'
+      publisher: 'Microsoft.Compute'
+      type: 'CustomScriptExtension'
+      typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
-      settings: {
-        modulesUrl: 'https://wvdportalstorageblob.blob.${environment().suffixes.storage}/galleryartifacts/Configuration_1.0.02802.442.zip'
-        configurationFunction: 'Configuration.ps1\\AddSessionHost'
-        properties: {
-          hostPoolName: hostPoolName
-          registrationInfoTokenCredential: {
-            UserName: 'PLACEHOLDER'
-            Password: 'PrivateSettingsRef:RegistrationInfoToken'
-          }
-          aadJoin: true
-        }
-      }
       protectedSettings: {
-        items: {
-          RegistrationInfoToken: registrationToken
-        }
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -Command "& { $ProgressPreference=\'SilentlyContinue\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH\' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\BootLoader.msi,\'/quiet\',\'/norestart\'; Invoke-WebRequest -Uri \'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv\' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList \'/i\',$env:TEMP\\RDAgent.msi,\'/quiet\',\'/norestart\'; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name RegistrationToken -Value \'${registrationToken}\'; Set-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\' -Name IsRegistered -Value 0; Restart-Service RDAgentBootLoader -Force }"'
       }
     }
     dependsOn: [aadJoin[i]]

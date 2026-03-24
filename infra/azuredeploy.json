@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.23.60470",
-      "templateHash": "12842664632934913189"
+      "templateHash": "5779167374457813152"
     }
   },
   "parameters": {
@@ -73,6 +73,13 @@
       "type": "securestring",
       "metadata": {
         "description": "Local admin password for session hosts"
+      }
+    },
+    "registrationToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Host pool registration token (retrieve via CLI after host pool deploy)"
       }
     },
     "deployFSLogix": {
@@ -327,7 +334,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "11445885050847884829"
+              "templateHash": "8624226990155283037"
             }
           },
           "parameters": {
@@ -475,16 +482,13 @@
             "workspaceId": {
               "type": "string",
               "value": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('workspaceName'))]"
-            },
-            "registrationToken": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), '2024-04-08-preview').registrationInfo.token]"
             }
           }
         }
       }
     },
     {
+      "condition": "[not(empty(parameters('registrationToken')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2022-09-01",
       "name": "deploy-sessionhosts",
@@ -510,7 +514,7 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.hostPoolName.value]"
           },
           "registrationToken": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.registrationToken.value]"
+            "value": "[parameters('registrationToken')]"
           },
           "adminUsername": {
             "value": "[parameters('adminUsername')]"
@@ -532,7 +536,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "6341087618851177917"
+              "templateHash": "8325711275496487071"
             }
           },
           "parameters": {
@@ -721,30 +725,16 @@
               },
               "type": "Microsoft.Compute/virtualMachines/extensions",
               "apiVersion": "2024-07-01",
-              "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'Microsoft.PowerShell.DSC')]",
+              "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'InstallAVDAgent')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "properties": {
-                "publisher": "Microsoft.Powershell",
-                "type": "DSC",
-                "typeHandlerVersion": "2.73",
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.10",
                 "autoUpgradeMinorVersion": true,
-                "settings": {
-                  "modulesUrl": "[format('https://wvdportalstorageblob.blob.{0}/galleryartifacts/Configuration_1.0.02802.442.zip', environment().suffixes.storage)]",
-                  "configurationFunction": "Configuration.ps1\\AddSessionHost",
-                  "properties": {
-                    "hostPoolName": "[parameters('hostPoolName')]",
-                    "registrationInfoTokenCredential": {
-                      "UserName": "PLACEHOLDER",
-                      "Password": "PrivateSettingsRef:RegistrationInfoToken"
-                    },
-                    "aadJoin": true
-                  }
-                },
                 "protectedSettings": {
-                  "items": {
-                    "RegistrationInfoToken": "[parameters('registrationToken')]"
-                  }
+                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -Command \"& {{ $ProgressPreference=''SilentlyContinue''; Invoke-WebRequest -Uri ''https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'' -OutFile $env:TEMP\\BootLoader.msi; Start-Process msiexec.exe -Wait -ArgumentList ''/i'',$env:TEMP\\BootLoader.msi,''/quiet'',''/norestart''; Invoke-WebRequest -Uri ''https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'' -OutFile $env:TEMP\\RDAgent.msi; Start-Process msiexec.exe -Wait -ArgumentList ''/i'',$env:TEMP\\RDAgent.msi,''/quiet'',''/norestart''; Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent'' -Name RegistrationToken -Value ''{0}''; Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent'' -Name IsRegistered -Value 0; Restart-Service RDAgentBootLoader -Force }}\"', parameters('registrationToken'))]"
                 }
               },
               "dependsOn": [
@@ -1004,7 +994,7 @@
     },
     "sessionHostVmNames": {
       "type": "array",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-sessionhosts'), '2022-09-01').outputs.vmNames.value]"
+      "value": "[if(not(empty(parameters('registrationToken'))), reference(resourceId('Microsoft.Resources/deployments', 'deploy-sessionhosts'), '2022-09-01').outputs.vmNames.value, createArray())]"
     },
     "fslogixStorageAccount": {
       "type": "string",

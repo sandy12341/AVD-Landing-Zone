@@ -76,4 +76,3 @@ output hostPoolId string = hostPool.id
 output hostPoolName string = hostPool.name
 output appGroupId string = appGroup.id
 output workspaceId string = workspace.id
-output registrationToken string = hostPool.properties.registrationInfo.token
