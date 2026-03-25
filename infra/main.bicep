@@ -58,8 +58,8 @@ param sessionHostSubnetPrefix string = '10.20.1.0/24'
 @description('Private endpoints subnet prefix')
 param privateEndpointSubnetPrefix string = '10.20.2.0/24'
 
-@description('Object ID of the user/group to grant AVD access. Leave empty to skip role assignments. Find via: az ad signed-in-user show --query id -o tsv')
-param avdUserObjectId string = ''
+@description('Email (UPN) of the user to grant AVD access. Leave empty to skip role assignments.')
+param avdUserEmail string = ''
 
 // ── Variables ──
 
@@ -122,7 +122,6 @@ module fslogix 'modules/fslogix.bicep' = if (deployFSLogix) {
   params: {
     location: location
     storageAccountName: storageAccountName
-    allowedSubnetId: network.outputs.sessionHostSubnetId
     tags: tags
   }
 }
@@ -138,34 +137,79 @@ module monitoring 'modules/monitoring.bicep' = if (deployMonitoring) {
   }
 }
 
-// ── AVD User Role Assignments (native Bicep) ──
-// Desktop Virtualization User — allows connecting via AVD client
-var desktopVirtUserRoleId = '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63'
-resource avdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId)) {
-  name: guid('dag-avd-${namingPrefix}', avdUserObjectId, desktopVirtUserRoleId)
-  scope: appGroupRef
+// ── AVD User Role Assignments (via Deployment Script) ──
+
+resource uami 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (!empty(avdUserEmail)) {
+  name: 'uami-avd-deploy-${namingPrefix}'
+  location: location
+  tags: tags
+}
+
+// Grant UAMI "User Access Administrator" on the resource group so it can assign roles
+var userAccessAdminRoleId = '18d7d88d-d35e-4fb5-a5c3-7773c20a72d9'
+resource uamiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserEmail)) {
+  name: guid(resourceGroup().id, uami!.id, userAccessAdminRoleId)
   properties: {
-    principalId: avdUserObjectId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', desktopVirtUserRoleId)
-    principalType: 'User'
+    principalId: uami!.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', userAccessAdminRoleId)
+    principalType: 'ServicePrincipal'
   }
 }
 
-// Reference the app group for scoped role assignment
-resource appGroupRef 'Microsoft.DesktopVirtualization/applicationGroups@2024-04-08-preview' existing = {
-  name: 'dag-avd-${namingPrefix}'
-  dependsOn: [hostPool]
+// Storage account for deployment scripts (shared key access required by ACI)
+resource dsStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if (!empty(avdUserEmail)) {
+  name: take('stds${replace(namingPrefix, '-', '')}${uniqueString(resourceGroup().id)}', 24)
+  location: location
+  kind: 'StorageV2'
+  sku: { name: 'Standard_LRS' }
+  properties: {
+    allowSharedKeyAccess: true
+    minimumTlsVersion: 'TLS1_2'
+  }
+  tags: tags
 }
 
-// Virtual Machine User Login — allows RDP sign-in to Entra ID joined VMs
-var vmUserLoginRoleId = 'fb879df8-f326-4884-b1cf-06f3ad86be52'
-resource vmLoginRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId)) {
-  name: guid(resourceGroup().id, avdUserObjectId, vmUserLoginRoleId)
-  properties: {
-    principalId: avdUserObjectId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', vmUserLoginRoleId)
-    principalType: 'User'
+resource assignAvdRoles 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (!empty(avdUserEmail)) {
+  name: 'ds-assign-avd-roles-${namingPrefix}'
+  location: location
+  kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${uami!.id}': {}
+    }
   }
+  dependsOn: [
+    uamiRoleAssignment
+  ]
+  properties: {
+    storageAccountSettings: {
+      storageAccountName: dsStorage!.name
+    }
+    azCliVersion: '2.63.0'
+    retentionInterval: 'PT1H'
+    timeout: 'PT10M'
+    environmentVariables: [
+      { name: 'USER_EMAIL', value: avdUserEmail }
+      { name: 'APP_GROUP_ID', value: hostPool.outputs.appGroupId }
+      { name: 'RG_ID', value: resourceGroup().id }
+    ]
+    scriptContent: '''
+      set -e
+      # Desktop Virtualization User on the App Group
+      az role assignment create \
+        --assignee "$USER_EMAIL" \
+        --role "1d18fff3-a72a-46b5-b4a9-0b37a71c1920" \
+        --scope "$APP_GROUP_ID"
+      # Virtual Machine User Login on the Resource Group
+      az role assignment create \
+        --assignee "$USER_EMAIL" \
+        --role "fb879df8-f326-4884-b1cf-06f3ad86be52" \
+        --scope "$RG_ID"
+      echo "{\"rolesAssigned\": true}" > $AZ_SCRIPTS_OUTPUT_PATH
+    '''
+  }
+  tags: tags
 }
 
 // ── Outputs ──
@@ -176,4 +220,4 @@ output vnetId string = network.outputs.vnetId
 output sessionHostVmNames array = sessionHosts.outputs.vmNames
 output fslogixStorageAccount string = deployFSLogix ? fslogix.outputs.storageAccountName : 'N/A'
 output logAnalyticsWorkspace string = deployMonitoring ? monitoring.outputs.workspaceName : 'N/A'
-output avdRolesAssigned bool = !empty(avdUserObjectId)
+output avdRolesAssigned bool = !empty(avdUserEmail)

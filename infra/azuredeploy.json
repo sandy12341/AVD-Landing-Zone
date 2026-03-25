@@ -1,12 +1,11 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "7135646104266735835"
+      "templateHash": "15712170036177332762"
     }
   },
   "parameters": {
@@ -120,11 +119,11 @@
         "description": "Private endpoints subnet prefix"
       }
     },
-    "avdUserObjectId": {
+    "avdUserEmail": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Object ID of the user/group to grant AVD access. Leave empty to skip role assignments. Find via: az ad signed-in-user show --query id -o tsv"
+        "description": "Email (UPN) of the user to grant AVD access. Leave empty to skip role assignments."
       }
     }
   },
@@ -135,46 +134,92 @@
       "Project": "AVD-Landing-Zone",
       "DeployedBy": "Bicep"
     },
-    "desktopVirtUserRoleId": "1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63",
-    "vmUserLoginRoleId": "fb879df8-f326-4884-b1cf-06f3ad86be52"
+    "userAccessAdminRoleId": "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
   },
-  "resources": {
-    "avdUserRole": {
-      "condition": "[not(empty(parameters('avdUserObjectId')))]",
+  "resources": [
+    {
+      "condition": "[not(empty(parameters('avdUserEmail')))]",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[format('uami-avd-deploy-{0}', variables('namingPrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "condition": "[not(empty(parameters('avdUserEmail')))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', format('dag-avd-{0}', variables('namingPrefix')))]",
-      "name": "[guid(format('dag-avd-{0}', variables('namingPrefix')), parameters('avdUserObjectId'), variables('desktopVirtUserRoleId'))]",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix'))), variables('userAccessAdminRoleId'))]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('desktopVirtUserRoleId'))]",
-        "principalType": "User"
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix'))), '2023-01-31').principalId]",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('userAccessAdminRoleId'))]",
+        "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "hostPool"
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix')))]"
       ]
     },
-    "appGroupRef": {
-      "existing": true,
-      "type": "Microsoft.DesktopVirtualization/applicationGroups",
-      "apiVersion": "2024-04-08-preview",
-      "name": "[format('dag-avd-{0}', variables('namingPrefix'))]",
-      "dependsOn": [
-        "hostPool"
-      ]
-    },
-    "vmLoginRole": {
-      "condition": "[not(empty(parameters('avdUserObjectId')))]",
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, parameters('avdUserObjectId'), variables('vmUserLoginRoleId'))]",
+    {
+      "condition": "[not(empty(parameters('avdUserEmail')))]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[take(format('stds{0}{1}', replace(variables('namingPrefix'), '-', ''), uniqueString(resourceGroup().id)), 24)]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('vmUserLoginRoleId'))]",
-        "principalType": "User"
-      }
+        "allowSharedKeyAccess": true,
+        "minimumTlsVersion": "TLS1_2"
+      },
+      "tags": "[variables('tags')]"
     },
-    "network": {
+    {
+      "condition": "[not(empty(parameters('avdUserEmail')))]",
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "[format('ds-assign-avd-roles-{0}', variables('namingPrefix'))]",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix'))))]": {}
+        }
+      },
+      "properties": {
+        "storageAccountSettings": {
+          "storageAccountName": "[take(format('stds{0}{1}', replace(variables('namingPrefix'), '-', ''), uniqueString(resourceGroup().id)), 24)]"
+        },
+        "azCliVersion": "2.63.0",
+        "retentionInterval": "PT1H",
+        "timeout": "PT10M",
+        "environmentVariables": [
+          {
+            "name": "USER_EMAIL",
+            "value": "[parameters('avdUserEmail')]"
+          },
+          {
+            "name": "APP_GROUP_ID",
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2025-04-01').outputs.appGroupId.value]"
+          },
+          {
+            "name": "RG_ID",
+            "value": "[resourceGroup().id]"
+          }
+        ],
+        "scriptContent": "      set -e\r\n      # Desktop Virtualization User on the App Group\r\n      az role assignment create \\\r\n        --assignee \"$USER_EMAIL\" \\\r\n        --role \"1d18fff3-a72a-46b5-b4a9-0b37a71c1920\" \\\r\n        --scope \"$APP_GROUP_ID\"\r\n      # Virtual Machine User Login on the Resource Group\r\n      az role assignment create \\\r\n        --assignee \"$USER_EMAIL\" \\\r\n        --role \"fb879df8-f326-4884-b1cf-06f3ad86be52\" \\\r\n        --scope \"$RG_ID\"\r\n      echo \"{\\\"rolesAssigned\\\": true}\" > $AZ_SCRIPTS_OUTPUT_PATH\r\n    "
+      },
+      "tags": "[variables('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', take(format('stds{0}{1}', replace(variables('namingPrefix'), '-', ''), uniqueString(resourceGroup().id)), 24))]",
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix')))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix'))), variables('userAccessAdminRoleId')))]"
+      ]
+    },
+    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "deploy-network",
@@ -210,7 +255,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "17358676214762147001"
+              "templateHash": "6832287009006135664"
             }
           },
           "parameters": {
@@ -312,54 +357,21 @@
                       },
                       "natGateway": {
                         "id": "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]"
-                      },
-                      "serviceEndpoints": [
-                        {
-                          "service": "Microsoft.Storage"
-                        }
-                      ]
+                      }
                     }
                   },
                   {
                     "name": "snet-avd-privateendpoints",
                     "properties": {
-                      "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]",
-                      "networkSecurityGroup": {
-                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-privateendpoints')]"
-                      }
+                      "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]"
                     }
                   }
                 ]
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]",
-                "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-privateendpoints')]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-sessionhosts')]"
               ]
-            },
-            {
-              "type": "Microsoft.Network/networkSecurityGroups",
-              "apiVersion": "2024-01-01",
-              "name": "nsg-avd-privateendpoints",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "securityRules": [
-                  {
-                    "name": "DenyAllInbound",
-                    "properties": {
-                      "priority": 4096,
-                      "direction": "Inbound",
-                      "access": "Deny",
-                      "protocol": "*",
-                      "sourceAddressPrefix": "*",
-                      "sourcePortRange": "*",
-                      "destinationAddressPrefix": "*",
-                      "destinationPortRange": "*"
-                    }
-                  }
-                ]
-              }
             },
             {
               "type": "Microsoft.Network/networkSecurityGroups",
@@ -416,7 +428,7 @@
         }
       }
     },
-    "hostPool": {
+    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "deploy-hostpool",
@@ -606,7 +618,7 @@
         }
       }
     },
-    "sessionHosts": {
+    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "deploy-sessionhosts",
@@ -626,10 +638,10 @@
             "value": "[parameters('vmSize')]"
           },
           "subnetId": {
-            "value": "[reference('network').outputs.sessionHostSubnetId.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-network'), '2025-04-01').outputs.sessionHostSubnetId.value]"
           },
           "hostPoolName": {
-            "value": "[reference('hostPool').outputs.hostPoolName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2025-04-01').outputs.hostPoolName.value]"
           },
           "adminUsername": {
             "value": "[parameters('adminUsername')]"
@@ -651,7 +663,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "17605323314635769108"
+              "templateHash": "16827956621561174131"
             }
           },
           "parameters": {
@@ -720,18 +732,6 @@
                 "description": "Tags for all resources"
               }
             },
-            "osDiskType": {
-              "type": "string",
-              "defaultValue": "Standard_LRS",
-              "allowedValues": [
-                "Standard_LRS",
-                "Premium_LRS",
-                "StandardSSD_LRS"
-              ],
-              "metadata": {
-                "description": "OS disk storage account type"
-              }
-            },
             "vmNamePrefix": {
               "type": "string",
               "defaultValue": "vm-avd",
@@ -766,7 +766,7 @@
                   "osDisk": {
                     "createOption": "FromImage",
                     "managedDisk": {
-                      "storageAccountType": "[parameters('osDiskType')]"
+                      "storageAccountType": "Premium_LRS"
                     },
                     "deleteOption": "Delete"
                   },
@@ -912,11 +912,11 @@
         }
       },
       "dependsOn": [
-        "hostPool",
-        "network"
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]",
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-network')]"
       ]
     },
-    "fslogix": {
+    {
       "condition": "[parameters('deployFSLogix')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -933,9 +933,6 @@
           "storageAccountName": {
             "value": "[parameters('storageAccountName')]"
           },
-          "allowedSubnetId": {
-            "value": "[reference('network').outputs.sessionHostSubnetId.value]"
-          },
           "tags": {
             "value": "[variables('tags')]"
           }
@@ -947,7 +944,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "5133970939058682553"
+              "templateHash": "10586505120154116902"
             }
           },
           "parameters": {
@@ -983,13 +980,6 @@
               "metadata": {
                 "description": "Tags for all resources"
               }
-            },
-            "allowedSubnetId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Subnet ID to allow storage access from (session hosts subnet)"
-              }
             }
           },
           "resources": [
@@ -1009,9 +999,7 @@
                 "allowBlobPublicAccess": false,
                 "allowSharedKeyAccess": true,
                 "networkAcls": {
-                  "defaultAction": "Deny",
-                  "virtualNetworkRules": "[if(not(empty(parameters('allowedSubnetId'))), createArray(createObject('id', parameters('allowedSubnetId'), 'action', 'Allow')), createArray())]",
-                  "bypass": "AzureServices"
+                  "defaultAction": "Allow"
                 }
               }
             },
@@ -1051,12 +1039,9 @@
             }
           }
         }
-      },
-      "dependsOn": [
-        "network"
-      ]
+      }
     },
-    "monitoring": {
+    {
       "condition": "[parameters('deployMonitoring')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -1143,35 +1128,35 @@
         }
       }
     }
-  },
+  ],
   "outputs": {
     "hostPoolName": {
       "type": "string",
-      "value": "[reference('hostPool').outputs.hostPoolName.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2025-04-01').outputs.hostPoolName.value]"
     },
     "workspaceId": {
       "type": "string",
-      "value": "[reference('hostPool').outputs.workspaceId.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2025-04-01').outputs.workspaceId.value]"
     },
     "vnetId": {
       "type": "string",
-      "value": "[reference('network').outputs.vnetId.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-network'), '2025-04-01').outputs.vnetId.value]"
     },
     "sessionHostVmNames": {
       "type": "array",
-      "value": "[reference('sessionHosts').outputs.vmNames.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-sessionhosts'), '2025-04-01').outputs.vmNames.value]"
     },
     "fslogixStorageAccount": {
       "type": "string",
-      "value": "[if(parameters('deployFSLogix'), reference('fslogix').outputs.storageAccountName.value, 'N/A')]"
+      "value": "[if(parameters('deployFSLogix'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-fslogix'), '2025-04-01').outputs.storageAccountName.value, 'N/A')]"
     },
     "logAnalyticsWorkspace": {
       "type": "string",
-      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.workspaceName.value, 'N/A')]"
+      "value": "[if(parameters('deployMonitoring'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-monitoring'), '2025-04-01').outputs.workspaceName.value, 'N/A')]"
     },
     "avdRolesAssigned": {
       "type": "bool",
-      "value": "[not(empty(parameters('avdUserObjectId')))]"
+      "value": "[not(empty(parameters('avdUserEmail')))]"
     }
   }
 }

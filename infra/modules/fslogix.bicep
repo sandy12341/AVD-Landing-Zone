@@ -13,9 +13,6 @@ param fileShareQuotaGiB int = 100
 @description('Tags for all resources')
 param tags object = {}
 
-@description('Subnet ID to allow storage access from (session hosts subnet)')
-param allowedSubnetId string = ''
-
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -30,14 +27,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     allowBlobPublicAccess: false
     allowSharedKeyAccess: true
     networkAcls: {
-      defaultAction: 'Deny'
-      virtualNetworkRules: !empty(allowedSubnetId) ? [
-        {
-          id: allowedSubnetId
-          action: 'Allow'
-        }
-      ] : []
-      bypass: 'AzureServices'
+      defaultAction: 'Allow'
     }
   }
 }

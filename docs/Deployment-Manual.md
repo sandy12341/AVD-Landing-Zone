@@ -153,7 +153,7 @@ az deployment group create \
                vmSize='Standard_D2ads_v5' \
                hostPoolType='Pooled' \
                adminUsername='avdadmin' \
-               adminPassword='<your-secure-password>'
+               adminPassword='YourSecurePassword123!'
 ```
 
 ### 2.4 Option C: Local Bicep Deployment (for Developers)
@@ -168,7 +168,7 @@ az deployment group create \
   --resource-group rg-avd-myapp-dev \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json \
-  --parameters adminPassword='<your-secure-password>'
+  --parameters adminPassword='YourSecurePassword123!'
 ```
 
 ### 2.5 Deployment Module Execution Order
