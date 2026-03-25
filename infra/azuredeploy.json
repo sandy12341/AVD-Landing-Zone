@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "6536040941658368117"
+      "templateHash": "15224993524670427787"
     }
   },
   "parameters": {
@@ -696,7 +696,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "16827956621561174131"
+              "templateHash": "17605323314635769108"
             }
           },
           "parameters": {
@@ -765,6 +765,18 @@
                 "description": "Tags for all resources"
               }
             },
+            "osDiskType": {
+              "type": "string",
+              "defaultValue": "Standard_LRS",
+              "allowedValues": [
+                "Standard_LRS",
+                "Premium_LRS",
+                "StandardSSD_LRS"
+              ],
+              "metadata": {
+                "description": "OS disk storage account type"
+              }
+            },
             "vmNamePrefix": {
               "type": "string",
               "defaultValue": "vm-avd",
@@ -799,7 +811,7 @@
                   "osDisk": {
                     "createOption": "FromImage",
                     "managedDisk": {
-                      "storageAccountType": "Premium_LRS"
+                      "storageAccountType": "[parameters('osDiskType')]"
                     },
                     "deleteOption": "Delete"
                   },

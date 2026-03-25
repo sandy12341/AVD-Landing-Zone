@@ -33,6 +33,10 @@ param imageReference object = {
 @description('Tags for all resources')
 param tags object = {}
 
+@description('OS disk storage account type')
+@allowed(['Standard_LRS', 'Premium_LRS', 'StandardSSD_LRS'])
+param osDiskType string = 'Standard_LRS'
+
 @description('Name prefix for session hosts')
 param vmNamePrefix string = 'vm-avd'
 
@@ -63,7 +67,7 @@ resource sessionHosts 'Microsoft.Compute/virtualMachines@2024-07-01' = [
         osDisk: {
           createOption: 'FromImage'
           managedDisk: {
-            storageAccountType: 'Premium_LRS'
+            storageAccountType: osDiskType
           }
           deleteOption: 'Delete'
         }
