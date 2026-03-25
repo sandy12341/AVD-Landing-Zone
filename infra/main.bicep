@@ -44,7 +44,7 @@ param deployFSLogix bool = true
 @description('Storage account name for FSLogix profiles (must be globally unique, 3-24 chars, lowercase/numbers only)')
 @minLength(3)
 @maxLength(24)
-param storageAccountName string = replace('stavd${deploymentPrefix}${environment}', '-', '')
+param storageAccountName string = 'stavdavd1dev'
 
 @description('Deploy monitoring (Log Analytics)')
 param deployMonitoring bool = true
