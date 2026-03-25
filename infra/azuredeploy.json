@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "15712170036177332762"
+      "templateHash": "6536040941658368117"
     }
   },
   "parameters": {
@@ -255,7 +255,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "6832287009006135664"
+              "templateHash": "17358676214762147001"
             }
           },
           "parameters": {
@@ -357,21 +357,54 @@
                       },
                       "natGateway": {
                         "id": "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]"
-                      }
+                      },
+                      "serviceEndpoints": [
+                        {
+                          "service": "Microsoft.Storage"
+                        }
+                      ]
                     }
                   },
                   {
                     "name": "snet-avd-privateendpoints",
                     "properties": {
-                      "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]"
+                      "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]",
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-privateendpoints')]"
+                      }
                     }
                   }
                 ]
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-privateendpoints')]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-sessionhosts')]"
               ]
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2024-01-01",
+              "name": "nsg-avd-privateendpoints",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "DenyAllInbound",
+                    "properties": {
+                      "priority": 4096,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourceAddressPrefix": "*",
+                      "sourcePortRange": "*",
+                      "destinationAddressPrefix": "*",
+                      "destinationPortRange": "*"
+                    }
+                  }
+                ]
+              }
             },
             {
               "type": "Microsoft.Network/networkSecurityGroups",
@@ -933,6 +966,9 @@
           "storageAccountName": {
             "value": "[parameters('storageAccountName')]"
           },
+          "allowedSubnetId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-network'), '2025-04-01').outputs.sessionHostSubnetId.value]"
+          },
           "tags": {
             "value": "[variables('tags')]"
           }
@@ -944,7 +980,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "10586505120154116902"
+              "templateHash": "5133970939058682553"
             }
           },
           "parameters": {
@@ -980,6 +1016,13 @@
               "metadata": {
                 "description": "Tags for all resources"
               }
+            },
+            "allowedSubnetId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Subnet ID to allow storage access from (session hosts subnet)"
+              }
             }
           },
           "resources": [
@@ -999,7 +1042,9 @@
                 "allowBlobPublicAccess": false,
                 "allowSharedKeyAccess": true,
                 "networkAcls": {
-                  "defaultAction": "Allow"
+                  "defaultAction": "Deny",
+                  "virtualNetworkRules": "[if(not(empty(parameters('allowedSubnetId'))), createArray(createObject('id', parameters('allowedSubnetId'), 'action', 'Allow')), createArray())]",
+                  "bypass": "AzureServices"
                 }
               }
             },
@@ -1039,7 +1084,10 @@
             }
           }
         }
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-network')]"
+      ]
     },
     {
       "condition": "[parameters('deployMonitoring')]",

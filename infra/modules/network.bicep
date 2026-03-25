@@ -62,12 +62,43 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
           natGateway: {
             id: natGateway.id
           }
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.Storage'
+            }
+          ]
         }
       }
       {
         name: 'snet-avd-privateendpoints'
         properties: {
           addressPrefix: privateEndpointSubnetPrefix
+          networkSecurityGroup: {
+            id: nsgPrivateEndpoints.id
+          }
+        }
+      }
+    ]
+  }
+}
+
+resource nsgPrivateEndpoints 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
+  name: 'nsg-avd-privateendpoints'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: [
+      {
+        name: 'DenyAllInbound'
+        properties: {
+          priority: 4096
+          direction: 'Inbound'
+          access: 'Deny'
+          protocol: '*'
+          sourceAddressPrefix: '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '*'
         }
       }
     ]
