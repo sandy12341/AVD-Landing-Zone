@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "7339244979468693232"
+      "templateHash": "15712170036177332762"
     }
   },
   "parameters": {
@@ -161,6 +161,22 @@
     },
     {
       "condition": "[not(empty(parameters('avdUserEmail')))]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[take(format('stds{0}{1}', replace(variables('namingPrefix'), '-', ''), uniqueString(resourceGroup().id)), 24)]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "properties": {
+        "allowSharedKeyAccess": true,
+        "minimumTlsVersion": "TLS1_2"
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "condition": "[not(empty(parameters('avdUserEmail')))]",
       "type": "Microsoft.Resources/deploymentScripts",
       "apiVersion": "2023-08-01",
       "name": "[format('ds-assign-avd-roles-{0}', variables('namingPrefix'))]",
@@ -173,6 +189,9 @@
         }
       },
       "properties": {
+        "storageAccountSettings": {
+          "storageAccountName": "[take(format('stds{0}{1}', replace(variables('namingPrefix'), '-', ''), uniqueString(resourceGroup().id)), 24)]"
+        },
         "azCliVersion": "2.63.0",
         "retentionInterval": "PT1H",
         "timeout": "PT10M",
@@ -194,6 +213,7 @@
       },
       "tags": "[variables('tags')]",
       "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', take(format('stds{0}{1}', replace(variables('namingPrefix'), '-', ''), uniqueString(resourceGroup().id)), 24))]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]",
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix')))]",
         "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-avd-deploy-{0}', variables('namingPrefix'))), variables('userAccessAdminRoleId')))]"

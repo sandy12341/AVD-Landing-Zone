@@ -156,6 +156,19 @@ resource uamiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
   }
 }
 
+// Storage account for deployment scripts (shared key access required by ACI)
+resource dsStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = if (!empty(avdUserEmail)) {
+  name: take('stds${replace(namingPrefix, '-', '')}${uniqueString(resourceGroup().id)}', 24)
+  location: location
+  kind: 'StorageV2'
+  sku: { name: 'Standard_LRS' }
+  properties: {
+    allowSharedKeyAccess: true
+    minimumTlsVersion: 'TLS1_2'
+  }
+  tags: tags
+}
+
 resource assignAvdRoles 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (!empty(avdUserEmail)) {
   name: 'ds-assign-avd-roles-${namingPrefix}'
   location: location
@@ -170,6 +183,9 @@ resource assignAvdRoles 'Microsoft.Resources/deploymentScripts@2023-08-01' = if 
     uamiRoleAssignment
   ]
   properties: {
+    storageAccountSettings: {
+      storageAccountName: dsStorage!.name
+    }
     azCliVersion: '2.63.0'
     retentionInterval: 'PT1H'
     timeout: 'PT10M'
