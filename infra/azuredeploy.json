@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.23.60470",
-      "templateHash": "9266515511277361347"
+      "templateHash": "7916232675084975119"
     }
   },
   "parameters": {
@@ -526,7 +526,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "9208588256707735945"
+              "templateHash": "6162415625609735904"
             }
           },
           "parameters": {
@@ -746,7 +746,7 @@
                   ]
                 },
                 "protectedSettings": {
-                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId ''{0}''', resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
+                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId \"{0}\"', resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
                 }
               },
               "dependsOn": [

@@ -165,7 +165,7 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
         ]
       }
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId \'${existingHostPool.id}\''
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId "${existingHostPool.id}"'
       }
     }
     dependsOn: [aadJoin[i], vmRoleAssignment[i]]
