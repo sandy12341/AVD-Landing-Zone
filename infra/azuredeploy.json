@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.23.60470",
-      "templateHash": "16485948104769668159"
+      "templateHash": "9266515511277361347"
     }
   },
   "parameters": {
@@ -327,7 +327,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "14513008110920958455"
+              "templateHash": "1773081255158210200"
             }
           },
           "parameters": {
@@ -476,10 +476,6 @@
             "workspaceId": {
               "type": "string",
               "value": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('workspaceName'))]"
-            },
-            "registrationToken": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), '2024-04-08-preview').registrationInfo.token]"
             }
           }
         }
@@ -510,9 +506,6 @@
           "hostPoolName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.hostPoolName.value]"
           },
-          "registrationToken": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.registrationToken.value]"
-          },
           "adminUsername": {
             "value": "[parameters('adminUsername')]"
           },
@@ -533,7 +526,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.23.60470",
-              "templateHash": "4452698150176273842"
+              "templateHash": "9208588256707735945"
             }
           },
           "parameters": {
@@ -569,12 +562,6 @@
               "type": "string",
               "metadata": {
                 "description": "Host pool name to register VMs with"
-              }
-            },
-            "registrationToken": {
-              "type": "securestring",
-              "metadata": {
-                "description": "Host pool registration token"
               }
             },
             "adminUsername": {
@@ -617,7 +604,8 @@
             }
           },
           "variables": {
-            "shortPrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 12)]"
+            "shortPrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 12)]",
+            "desktopVirtContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '082f0a83-3be5-4ba1-904c-961cca79b387')]"
           },
           "resources": [
             {
@@ -700,6 +688,25 @@
             },
             {
               "copy": {
+                "name": "vmRoleAssignment",
+                "count": "[length(range(0, parameters('sessionHostCount')))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.DesktopVirtualization/hostPools/{0}', parameters('hostPoolName'))]",
+              "name": "[guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]])), 'avd-contributor')]",
+              "properties": {
+                "roleDefinitionId": "[variables('desktopVirtContributorRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]])), '2024-07-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]",
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]"
+              ]
+            },
+            {
+              "copy": {
                 "name": "aadJoin",
                 "count": "[length(range(0, parameters('sessionHostCount')))]"
               },
@@ -739,12 +746,13 @@
                   ]
                 },
                 "protectedSettings": {
-                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -RegistrationToken ''{0}''', parameters('registrationToken'))]"
+                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId ''{0}''', resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
                 }
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Compute/virtualMachines/extensions', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]]), 'AADLoginForWindows')]",
-                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]"
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]",
+                "[extensionResourceId(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]])), 'avd-contributor'))]"
               ]
             }
           ],

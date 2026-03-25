@@ -1,10 +1,36 @@
 param(
     [Parameter(Mandatory=$true)]
-    [string]$RegistrationToken
+    [string]$HostPoolResourceId
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+
+# Retrieve registration token from host pool using VM managed identity
+Write-Output "Retrieving registration token via managed identity..."
+$registrationToken = $null
+for ($retry = 1; $retry -le 18; $retry++) {
+    try {
+        $imdsUrl = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/'
+        $tokenResponse = Invoke-RestMethod -Uri $imdsUrl -Headers @{Metadata='true'} -Method GET
+        $accessToken = $tokenResponse.access_token
+        $apiUrl = "https://management.azure.com${HostPoolResourceId}/retrieveRegistrationToken?api-version=2024-04-08-preview"
+        $headers = @{ Authorization = "Bearer $accessToken"; 'Content-Type' = 'application/json' }
+        $regResponse = Invoke-RestMethod -Uri $apiUrl -Method POST -Headers $headers -Body '{}'
+        $registrationToken = $regResponse.token
+        if ($registrationToken) {
+            Write-Output "Registration token retrieved (attempt $retry)."
+            break
+        }
+    } catch {
+        Write-Output "Attempt $retry failed: $($_.Exception.Message)"
+        if ($retry -lt 18) { Start-Sleep -Seconds 10 }
+    }
+}
+if (-not $registrationToken) {
+    Write-Error "Failed to retrieve registration token after 18 attempts."
+    exit 1
+}
 
 # Download and install AVD BootLoader
 Write-Output "Downloading AVD BootLoader..."
@@ -24,7 +50,7 @@ Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue
 Stop-Service RdAgent -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 5
 
-Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\RDInfraAgent' -Name RegistrationToken -Value $RegistrationToken
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\RDInfraAgent' -Name RegistrationToken -Value $registrationToken
 Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\RDInfraAgent' -Name IsRegistered -Value 0
 
 Start-Service RdAgent

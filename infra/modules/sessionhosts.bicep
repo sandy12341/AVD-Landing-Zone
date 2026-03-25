@@ -15,10 +15,6 @@ param subnetId string
 @description('Host pool name to register VMs with')
 param hostPoolName string
 
-@description('Host pool registration token')
-@secure()
-param registrationToken string
-
 @description('Local admin username')
 param adminUsername string
 
@@ -42,6 +38,14 @@ param vmNamePrefix string = 'vm-avd'
 
 // Derive a unique short computer name (max 15 chars) from vmNamePrefix
 var shortPrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 12)
+
+// Reference existing host pool for role assignment and token retrieval
+resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-08-preview' existing = {
+  name: hostPoolName
+}
+
+// Desktop Virtualization Contributor role — allows VMs to retrieve registration token
+var desktopVirtContributorRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '082f0a83-3be5-4ba1-904c-961cca79b387')
 
 resource sessionHosts 'Microsoft.Compute/virtualMachines@2024-07-01' = [
   for i in range(0, sessionHostCount): {
@@ -112,6 +116,19 @@ resource nics 'Microsoft.Network/networkInterfaces@2024-01-01' = [
   }
 ]
 
+// Role assignment — allow each VM to retrieve host pool registration token
+resource vmRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for i in range(0, sessionHostCount): {
+    name: guid(existingHostPool.id, sessionHosts[i].id, 'avd-contributor')
+    scope: existingHostPool
+    properties: {
+      roleDefinitionId: desktopVirtContributorRoleId
+      principalId: sessionHosts[i].identity.principalId
+      principalType: 'ServicePrincipal'
+    }
+  }
+]
+
 // Entra ID (AAD) join extension
 resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
   for i in range(0, sessionHostCount): {
@@ -148,10 +165,10 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
         ]
       }
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -RegistrationToken \'${registrationToken}\''
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId \'${existingHostPool.id}\''
       }
     }
-    dependsOn: [aadJoin[i]]
+    dependsOn: [aadJoin[i], vmRoleAssignment[i]]
   }
 ]
 

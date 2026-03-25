@@ -100,7 +100,6 @@ module sessionHosts 'modules/sessionhosts.bicep' = {
     vmSize: vmSize
     subnetId: network.outputs.sessionHostSubnetId
     hostPoolName: hostPool.outputs.hostPoolName
-    registrationToken: hostPool.outputs.registrationToken
     adminUsername: adminUsername
     adminPassword: adminPassword
     vmNamePrefix: 'vm-avd-${namingPrefix}'
