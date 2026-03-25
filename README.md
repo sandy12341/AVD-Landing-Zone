@@ -44,7 +44,7 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 
 ## Prerequisites
 
-- Azure subscription with **Contributor** access
+- Azure subscription with **Owner** access (required for auto role assignments; Contributor is sufficient if `avdUserEmail` is left empty)
 - Resource provider `Microsoft.DesktopVirtualization` registered
 - Resource provider `Microsoft.Storage` registered (for FSLogix)
 
@@ -96,6 +96,7 @@ New-AzResourceGroupDeployment `
 | `deployFSLogix` | bool | `true` | Deploy FSLogix Azure Files storage |
 | `storageAccountName` | string | `stavd<prefix><env>` | Storage account name for FSLogix (globally unique, 3-24 chars) |
 | `deployMonitoring` | bool | `true` | Deploy Log Analytics workspace |
+| `avdUserEmail` | string | _(empty)_ | Email/UPN of user to grant AVD access (leave empty to skip) |
 
 ## Connecting to AVD
 
