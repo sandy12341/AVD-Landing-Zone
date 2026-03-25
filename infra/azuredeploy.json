@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.23.60470",
-      "templateHash": "7916232675084975119"
+      "templateHash": "2471062655233563016"
     }
   },
   "parameters": {
@@ -80,6 +80,15 @@
       "defaultValue": true,
       "metadata": {
         "description": "Deploy FSLogix profile storage"
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[replace(format('stavd{0}{1}', parameters('deploymentPrefix'), parameters('environment')), '-', '')]",
+      "minLength": 3,
+      "maxLength": 24,
+      "metadata": {
+        "description": "Storage account name for FSLogix profiles (must be globally unique, 3-24 chars, lowercase/numbers only)"
       }
     },
     "deployMonitoring": {
@@ -794,7 +803,7 @@
             "value": "[parameters('location')]"
           },
           "storageAccountName": {
-            "value": "[replace(format('stavd{0}', variables('namingPrefix')), '-', '')]"
+            "value": "[parameters('storageAccountName')]"
           },
           "tags": {
             "value": "[variables('tags')]"

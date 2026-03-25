@@ -41,6 +41,11 @@ param adminPassword string
 @description('Deploy FSLogix profile storage')
 param deployFSLogix bool = true
 
+@description('Storage account name for FSLogix profiles (must be globally unique, 3-24 chars, lowercase/numbers only)')
+@minLength(3)
+@maxLength(24)
+param storageAccountName string = replace('stavd${deploymentPrefix}${environment}', '-', '')
+
 @description('Deploy monitoring (Log Analytics)')
 param deployMonitoring bool = true
 
@@ -113,7 +118,7 @@ module fslogix 'modules/fslogix.bicep' = if (deployFSLogix) {
   name: 'deploy-fslogix'
   params: {
     location: location
-    storageAccountName: replace('stavd${namingPrefix}', '-', '')
+    storageAccountName: storageAccountName
     tags: tags
   }
 }

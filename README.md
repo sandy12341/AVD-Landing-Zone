@@ -94,6 +94,7 @@ New-AzResourceGroupDeployment `
 | `adminUsername` | string | `avdadmin` | Local admin username |
 | `adminPassword` | secureString | - | Local admin password (required) |
 | `deployFSLogix` | bool | `true` | Deploy FSLogix Azure Files storage |
+| `storageAccountName` | string | `stavd<prefix><env>` | Storage account name for FSLogix (globally unique, 3-24 chars) |
 | `deployMonitoring` | bool | `true` | Deploy Log Analytics workspace |
 
 ## Connecting to AVD
