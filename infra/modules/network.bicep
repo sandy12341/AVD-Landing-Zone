@@ -16,6 +16,33 @@ param privateEndpointSubnetPrefix string = '10.20.2.0/24'
 @description('Tags for all resources')
 param tags object = {}
 
+resource natGatewayPublicIp 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
+  name: '${vnetName}-natgw-pip'
+  location: location
+  tags: tags
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+}
+
+resource natGateway 'Microsoft.Network/natGateways@2024-01-01' = {
+  name: '${vnetName}-natgw'
+  location: location
+  tags: tags
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIpAddresses: [
+      { id: natGatewayPublicIp.id }
+    ]
+    idleTimeoutInMinutes: 4
+  }
+}
+
 resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
   name: vnetName
   location: location
@@ -31,6 +58,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
           addressPrefix: sessionHostSubnetPrefix
           networkSecurityGroup: {
             id: nsgSessionHosts.id
+          }
+          natGateway: {
+            id: natGateway.id
           }
         }
       }
