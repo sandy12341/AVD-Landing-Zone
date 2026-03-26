@@ -62,6 +62,11 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
           natGateway: {
             id: natGateway.id
           }
+          serviceEndpoints: [
+            {
+              service: 'Microsoft.Storage'
+            }
+          ]
         }
       }
       {

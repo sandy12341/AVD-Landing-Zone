@@ -39,6 +39,9 @@ param vmNamePrefix string = 'vm-avd'
 // Derive a unique short computer name (max 15 chars) from vmNamePrefix
 var shortPrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 12)
 
+// Load install script at compile time (no runtime dependency on GitHub)
+var installScriptContent = loadTextContent('../scripts/Install-AVDAgent.ps1')
+
 // Reference existing host pool for role assignment and token retrieval
 resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-08-preview' existing = {
   name: hostPoolName
@@ -159,13 +162,8 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
       type: 'CustomScriptExtension'
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
-      settings: {
-        fileUris: [
-          'https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1'
-        ]
-      }
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId "${existingHostPool.id}"'
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -Command "[IO.File]::WriteAllText(\'C:\\Windows\\Temp\\Install-AVDAgent.ps1\',[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(\'${base64(installScriptContent)}\')));& \'C:\\Windows\\Temp\\Install-AVDAgent.ps1\' -HostPoolResourceId \'${existingHostPool.id}\'"'
       }
     }
     dependsOn: [aadJoin[i], vmRoleAssignment[i]]

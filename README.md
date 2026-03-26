@@ -37,14 +37,14 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 
 - **Host Pool**: Pooled (BreadthFirst) or Personal, with Start VM on Connect
 - **Session Hosts**: Windows 11 24H2 Multi-Session, Entra ID joined, System Assigned Managed Identity
-- **FSLogix**: Azure Files share for user profile containers
+- **FSLogix**: Azure Files share for user profile containers (Entra ID Kerberos auth, VNet-restricted)
 - **Networking**: Dedicated VNet with NSG, separate subnets for hosts and private endpoints
 - **Monitoring**: Log Analytics workspace for diagnostics
-- **Security**: NSG restricts RDP to VNet only, TLS 1.2 enforced on storage
+- **Security**: NSG restricts RDP to VNet only, TLS 1.2 enforced on storage, no shared key access, inline CSE (no external script downloads)
 
 ## Prerequisites
 
-- Azure subscription with **Owner** access (required for auto role assignments; Contributor is sufficient if `avdUserEmail` is left empty)
+- Azure subscription with **Owner** access (required for auto role assignments; Contributor is sufficient if `avdUserObjectId` is left empty)
 - Resource provider `Microsoft.DesktopVirtualization` registered
 - Resource provider `Microsoft.Storage` registered (for FSLogix)
 
@@ -96,7 +96,7 @@ New-AzResourceGroupDeployment `
 | `deployFSLogix` | bool | `true` | Deploy FSLogix Azure Files storage |
 | `storageAccountName` | string | `stavd<prefix><env>` | Storage account name for FSLogix (globally unique, 3-24 chars) |
 | `deployMonitoring` | bool | `true` | Deploy Log Analytics workspace |
-| `avdUserEmail` | string | _(empty)_ | Email/UPN of user to grant AVD access (leave empty to skip) |
+| `avdUserObjectId` | string | _(empty)_ | Entra Object ID of user to grant AVD access (leave empty to skip). Get via: `az ad user show --id user@domain.com --query id -o tsv` |
 
 ## Connecting to AVD
 

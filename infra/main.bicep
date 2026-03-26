@@ -122,6 +122,7 @@ module fslogix 'modules/fslogix.bicep' = if (deployFSLogix) {
   params: {
     location: location
     storageAccountName: storageAccountName
+    sessionHostSubnetId: network.outputs.sessionHostSubnetId
     tags: tags
   }
 }

@@ -75,7 +75,8 @@ Session host VMs require **outbound internet access** to:
 | `169.254.169.254` | Azure Instance Metadata Service (IMDS) — used for managed identity token retrieval |
 | `management.azure.com` | ARM API — used by the VM to retrieve the host pool registration token |
 | `query.prod.cms.rt.microsoft.com` | Microsoft download CDN — AVD BootLoader and RDAgent MSI downloads |
-| `raw.githubusercontent.com` | GitHub — the Install-AVDAgent.ps1 script is downloaded from the repo during deployment |
+
+> **Note:** `raw.githubusercontent.com` is **no longer required** — the Install-AVDAgent.ps1 script is embedded inline in the ARM template at compile time.
 
 > **Important:** If a firewall or NSG blocks outbound access to any of these endpoints, the agent installation will fail silently. The CSE (Custom Script Extension) will time out and the session host will not register.
 

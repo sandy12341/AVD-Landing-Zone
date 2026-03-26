@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "8560569208020065403"
+      "templateHash": "9101583774006721741"
     }
   },
   "parameters": {
@@ -208,7 +208,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "6832287009006135664"
+              "templateHash": "11900941526185748342"
             }
           },
           "parameters": {
@@ -310,7 +310,12 @@
                       },
                       "natGateway": {
                         "id": "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]"
-                      }
+                      },
+                      "serviceEndpoints": [
+                        {
+                          "service": "Microsoft.Storage"
+                        }
+                      ]
                     }
                   },
                   {
@@ -616,7 +621,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "16827956621561174131"
+              "templateHash": "2068251043788782924"
             }
           },
           "parameters": {
@@ -695,6 +700,7 @@
           },
           "variables": {
             "shortPrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 12)]",
+            "installScriptContent": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$HostPoolResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$ProgressPreference = 'SilentlyContinue'\r\n\r\n# Download AVD agent MSIs first (before token retrieval, so token is as fresh as possible)\r\nWrite-Output \"Downloading AVD BootLoader...\"\r\nInvoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH' -OutFile \"$env:TEMP\\BootLoader.msi\"\r\nWrite-Output \"Downloading AVD RD Agent...\"\r\nInvoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv' -OutFile \"$env:TEMP\\RDAgent.msi\"\r\nWrite-Output \"Both MSIs downloaded.\"\r\n\r\n# Retrieve registration token from host pool using VM managed identity\r\nWrite-Output \"Retrieving registration token via managed identity...\"\r\n$registrationToken = $null\r\nfor ($retry = 1; $retry -le 18; $retry++) {\r\n    try {\r\n        $imdsUrl = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/'\r\n        $tokenResponse = Invoke-RestMethod -Uri $imdsUrl -Headers @{Metadata='true'} -Method GET\r\n        $accessToken = $tokenResponse.access_token\r\n        $apiUrl = \"https://management.azure.com${HostPoolResourceId}/retrieveRegistrationToken?api-version=2024-04-08-preview\"\r\n        $headers = @{ Authorization = \"Bearer $accessToken\"; 'Content-Type' = 'application/json' }\r\n        $regResponse = Invoke-RestMethod -Uri $apiUrl -Method POST -Headers $headers -Body '{}'\r\n        $registrationToken = $regResponse.token\r\n        if ($registrationToken) {\r\n            Write-Output \"Registration token retrieved (attempt $retry).\"\r\n            break\r\n        }\r\n    } catch {\r\n        Write-Output \"Attempt $retry failed: $($_.Exception.Message)\"\r\n        if ($retry -lt 18) { Start-Sleep -Seconds 10 }\r\n    }\r\n}\r\nif (-not $registrationToken) {\r\n    Write-Error \"Failed to retrieve registration token after 18 attempts.\"\r\n    exit 1\r\n}\r\n\r\n# Install AVD BootLoader (MSI already downloaded)\r\nWrite-Output \"Installing AVD BootLoader...\"\r\nStart-Process msiexec.exe -Wait -ArgumentList '/i', \"$env:TEMP\\BootLoader.msi\", '/quiet', '/norestart'\r\n\r\n# Install AVD RD Agent (MSI already downloaded)\r\nWrite-Output \"Installing AVD RD Agent...\"\r\nStart-Process msiexec.exe -Wait -ArgumentList '/i', \"$env:TEMP\\RDAgent.msi\", '/quiet', '/norestart'\r\n\r\n# Configure registration via registry\r\nWrite-Output \"Configuring AVD agent registration...\"\r\nStop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\nStop-Service RdAgent -Force -ErrorAction SilentlyContinue\r\nStart-Sleep -Seconds 5\r\n\r\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name RegistrationToken -Value $registrationToken\r\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name IsRegistered -Value 0\r\n\r\nStart-Service RdAgent\r\nStart-Sleep -Seconds 5\r\nStart-Service RDAgentBootLoader\r\n\r\n# Wait for registration with retry (up to 3 attempts, 120s each, 30s pause between)\r\nfor ($attempt = 1; $attempt -le 3; $attempt++) {\r\n    Write-Output \"Registration attempt $attempt of 3...\"\r\n    for ($wait = 0; $wait -lt 120; $wait += 10) {\r\n        Start-Sleep -Seconds 10\r\n        $isReg = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n        if ($isReg -eq 1) {\r\n            Write-Output \"AVD agent registered successfully (attempt $attempt).\"\r\n            exit 0\r\n        }\r\n    }\r\n\r\n    if ($attempt -lt 3) {\r\n        Write-Output \"Not registered yet. Waiting 30s before retry...\"\r\n        Start-Sleep -Seconds 30\r\n        Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\n        Stop-Service RdAgent -Force -ErrorAction SilentlyContinue\r\n        Start-Sleep -Seconds 5\r\n        Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name IsRegistered -Value 0\r\n        Start-Service RdAgent\r\n        Start-Sleep -Seconds 5\r\n        Start-Service RDAgentBootLoader\r\n    }\r\n}\r\n\r\n$finalStatus = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\nWrite-Output \"Final registration status: IsRegistered=$finalStatus\"\r\n\r\n# ── Create startup health-check script and scheduled task ──\r\nWrite-Output \"Setting up AVD Agent startup health check...\"\r\n\r\n$healthCheckDir = 'C:\\AVD'\r\nif (-not (Test-Path $healthCheckDir)) { New-Item -Path $healthCheckDir -ItemType Directory -Force | Out-Null }\r\n\r\n$healthCheckScript = @'\r\n# Ensure-AVDAgentHealthy.ps1 — runs at VM startup\r\n# Waits for outbound connectivity, then verifies the AVD agent is heartbeating.\r\n# If the agent isn't registered after boot, restarts the BootLoader service.\r\n\r\n$logFile = 'C:\\AVD\\health-check.log'\r\nfunction Log($msg) { \"$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg\" | Out-File -Append -FilePath $logFile }\r\n\r\nLog \"AVD Agent health check started.\"\r\n\r\n# 1. Wait for outbound connectivity to AVD broker (up to 5 minutes)\r\n$maxWait = 300\r\n$elapsed = 0\r\nwhile ($elapsed -lt $maxWait) {\r\n    $test = Test-NetConnection -ComputerName rdbroker.wvd.microsoft.com -Port 443 -WarningAction SilentlyContinue\r\n    if ($test.TcpTestSucceeded) {\r\n        Log \"Outbound connectivity confirmed after ${elapsed}s.\"\r\n        break\r\n    }\r\n    Start-Sleep -Seconds 10\r\n    $elapsed += 10\r\n}\r\nif ($elapsed -ge $maxWait) {\r\n    Log \"ERROR: No outbound connectivity after ${maxWait}s. Exiting.\"\r\n    exit 1\r\n}\r\n\r\n# 2. Give the agent time to heartbeat after boot\r\nStart-Sleep -Seconds 30\r\n\r\n# 3. Check if agent services are running; restart if needed\r\n$bootLoader = Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue\r\n$rdAgent = Get-Service RdAgent -ErrorAction SilentlyContinue\r\n\r\nif ($rdAgent.Status -ne 'Running') {\r\n    Log \"RdAgent not running (Status=$($rdAgent.Status)). Starting...\"\r\n    Start-Service RdAgent -ErrorAction SilentlyContinue\r\n    Start-Sleep -Seconds 10\r\n}\r\n\r\nif ($bootLoader.Status -ne 'Running') {\r\n    Log \"RDAgentBootLoader not running (Status=$($bootLoader.Status)). Starting...\"\r\n    Start-Service RDAgentBootLoader -ErrorAction SilentlyContinue\r\n    Start-Sleep -Seconds 10\r\n}\r\n\r\n# 4. Wait up to 2 minutes for registration\r\n$registered = $false\r\nfor ($i = 0; $i -lt 12; $i++) {\r\n    $isReg = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n    if ($isReg -eq 1) {\r\n        $registered = $true\r\n        Log \"Agent is registered and healthy.\"\r\n        break\r\n    }\r\n    Start-Sleep -Seconds 10\r\n}\r\n\r\n# 5. If still not registered, restart BootLoader as a recovery step\r\nif (-not $registered) {\r\n    Log \"Agent not registered after waiting. Restarting RDAgentBootLoader...\"\r\n    Restart-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\n    Start-Sleep -Seconds 30\r\n    $isReg = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n    Log \"Post-restart registration status: IsRegistered=$isReg\"\r\n}\r\n\r\nLog \"Health check complete.\"\r\n'@\r\n\r\nSet-Content -Path \"$healthCheckDir\\Ensure-AVDAgentHealthy.ps1\" -Value $healthCheckScript -Force\r\n\r\n# Register scheduled task to run at startup as SYSTEM\r\n$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden -File C:\\AVD\\Ensure-AVDAgentHealthy.ps1'\r\n$trigger = New-ScheduledTaskTrigger -AtStartup\r\n$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable\r\n$existing = Get-ScheduledTask -TaskName 'AVD-Agent-Health-Check' -ErrorAction SilentlyContinue\r\nif ($existing) { Unregister-ScheduledTask -TaskName 'AVD-Agent-Health-Check' -Confirm:$false }\r\nRegister-ScheduledTask -TaskName 'AVD-Agent-Health-Check' -Action $action -Trigger $trigger -Settings $settings -User 'SYSTEM' -RunLevel Highest -Force | Out-Null\r\nWrite-Output \"Startup health check task registered.\"\r\n\r\nexit 0\r\n",
             "desktopVirtContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '082f0a83-3be5-4ba1-904c-961cca79b387')]"
           },
           "resources": [
@@ -830,13 +836,8 @@
                 "type": "CustomScriptExtension",
                 "typeHandlerVersion": "1.10",
                 "autoUpgradeMinorVersion": true,
-                "settings": {
-                  "fileUris": [
-                    "https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1"
-                  ]
-                },
                 "protectedSettings": {
-                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId \"{0}\"', resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
+                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -Command \"[IO.File]::WriteAllText(''C:\\Windows\\Temp\\Install-AVDAgent.ps1'',[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''{0}'')));& ''C:\\Windows\\Temp\\Install-AVDAgent.ps1'' -HostPoolResourceId ''{1}''\"', base64(variables('installScriptContent')), resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
                 }
               },
               "dependsOn": [
@@ -886,6 +887,9 @@
           "storageAccountName": {
             "value": "[parameters('storageAccountName')]"
           },
+          "sessionHostSubnetId": {
+            "value": "[reference('network').outputs.sessionHostSubnetId.value]"
+          },
           "tags": {
             "value": "[variables('tags')]"
           }
@@ -897,7 +901,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "10586505120154116902"
+              "templateHash": "17643741770556018182"
             }
           },
           "parameters": {
@@ -933,6 +937,13 @@
               "metadata": {
                 "description": "Tags for all resources"
               }
+            },
+            "sessionHostSubnetId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Session host subnet ID for VNet service endpoint access"
+              }
             }
           },
           "resources": [
@@ -950,9 +961,14 @@
                 "minimumTlsVersion": "TLS1_2",
                 "supportsHttpsTrafficOnly": true,
                 "allowBlobPublicAccess": false,
-                "allowSharedKeyAccess": true,
+                "allowSharedKeyAccess": false,
+                "azureFilesIdentityBasedAuthentication": {
+                  "directoryServiceOptions": "AADKERB"
+                },
                 "networkAcls": {
-                  "defaultAction": "Allow"
+                  "defaultAction": "Deny",
+                  "bypass": "AzureServices",
+                  "virtualNetworkRules": "[if(not(empty(parameters('sessionHostSubnetId'))), createArray(createObject('id', parameters('sessionHostSubnetId'), 'action', 'Allow')), createArray())]"
                 }
               }
             },
@@ -992,7 +1008,10 @@
             }
           }
         }
-      }
+      },
+      "dependsOn": [
+        "network"
+      ]
     },
     "monitoring": {
       "condition": "[parameters('deployMonitoring')]",

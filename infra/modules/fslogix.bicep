@@ -13,6 +13,9 @@ param fileShareQuotaGiB int = 100
 @description('Tags for all resources')
 param tags object = {}
 
+@description('Session host subnet ID for VNet service endpoint access')
+param sessionHostSubnetId string = ''
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -25,9 +28,19 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
     allowBlobPublicAccess: false
-    allowSharedKeyAccess: true
+    allowSharedKeyAccess: false
+    azureFilesIdentityBasedAuthentication: {
+      directoryServiceOptions: 'AADKERB'
+    }
     networkAcls: {
-      defaultAction: 'Allow'
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+      virtualNetworkRules: !empty(sessionHostSubnetId) ? [
+        {
+          id: sessionHostSubnetId
+          action: 'Allow'
+        }
+      ] : []
     }
   }
 }

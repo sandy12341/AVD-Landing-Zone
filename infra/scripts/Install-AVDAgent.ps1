@@ -6,6 +6,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+# Download AVD agent MSIs first (before token retrieval, so token is as fresh as possible)
+Write-Output "Downloading AVD BootLoader..."
+Invoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH' -OutFile "$env:TEMP\BootLoader.msi"
+Write-Output "Downloading AVD RD Agent..."
+Invoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv' -OutFile "$env:TEMP\RDAgent.msi"
+Write-Output "Both MSIs downloaded."
+
 # Retrieve registration token from host pool using VM managed identity
 Write-Output "Retrieving registration token via managed identity..."
 $registrationToken = $null
@@ -32,15 +39,11 @@ if (-not $registrationToken) {
     exit 1
 }
 
-# Download and install AVD BootLoader
-Write-Output "Downloading AVD BootLoader..."
-Invoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH' -OutFile "$env:TEMP\BootLoader.msi"
+# Install AVD BootLoader (MSI already downloaded)
 Write-Output "Installing AVD BootLoader..."
 Start-Process msiexec.exe -Wait -ArgumentList '/i', "$env:TEMP\BootLoader.msi", '/quiet', '/norestart'
 
-# Download and install AVD RD Agent
-Write-Output "Downloading AVD RD Agent..."
-Invoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv' -OutFile "$env:TEMP\RDAgent.msi"
+# Install AVD RD Agent (MSI already downloaded)
 Write-Output "Installing AVD RD Agent..."
 Start-Process msiexec.exe -Wait -ArgumentList '/i', "$env:TEMP\RDAgent.msi", '/quiet', '/norestart'
 
@@ -57,10 +60,10 @@ Start-Service RdAgent
 Start-Sleep -Seconds 5
 Start-Service RDAgentBootLoader
 
-# Wait for registration with retry (up to 3 attempts, 90s each)
+# Wait for registration with retry (up to 3 attempts, 120s each, 30s pause between)
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     Write-Output "Registration attempt $attempt of 3..."
-    for ($wait = 0; $wait -lt 90; $wait += 10) {
+    for ($wait = 0; $wait -lt 120; $wait += 10) {
         Start-Sleep -Seconds 10
         $isReg = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered
         if ($isReg -eq 1) {
@@ -70,7 +73,8 @@ for ($attempt = 1; $attempt -le 3; $attempt++) {
     }
 
     if ($attempt -lt 3) {
-        Write-Output "Not registered yet. Restarting services for retry..."
+        Write-Output "Not registered yet. Waiting 30s before retry..."
+        Start-Sleep -Seconds 30
         Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue
         Stop-Service RdAgent -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 5
