@@ -76,7 +76,7 @@ Session host VMs require **outbound internet access** to:
 | `management.azure.com` | ARM API — used by the VM to retrieve the host pool registration token |
 | `query.prod.cms.rt.microsoft.com` | Microsoft download CDN — AVD BootLoader and RDAgent MSI downloads |
 
-> **Note:** `raw.githubusercontent.com` is **no longer required** — the Install-AVDAgent.ps1 script is embedded inline in the ARM template at compile time.
+> **Note:** `raw.githubusercontent.com` is required for the current Deploy to Azure flow because the Custom Script Extension downloads `Install-AVDAgent.ps1` from the repository at runtime. This avoids the Windows `The command line is too long` failure caused by embedding the full script body into `commandToExecute`.
 
 > **Important:** If a firewall or NSG blocks outbound access to any of these endpoints, the agent installation will fail silently. The CSE (Custom Script Extension) will time out and the session host will not register.
 

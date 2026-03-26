@@ -36,11 +36,13 @@ param tags object = {}
 @description('Name prefix for session hosts')
 param vmNamePrefix string = 'vm-avd'
 
-// Derive a unique short computer name (max 15 chars) from vmNamePrefix
-var shortPrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 12)
+// Derive a deployment-unique computer name (max 15 chars) to avoid stale Entra device hostname collisions.
+var computerNamePrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 10)
+var computerNameSeed = take(uniqueString(resourceGroup().id), 4)
 
-// Load install script at compile time (no runtime dependency on GitHub)
-var installScriptContent = loadTextContent('../scripts/Install-AVDAgent.ps1')
+// Download the install script at runtime to avoid overflowing the Windows command-line
+// limit in Custom Script Extension when the script content is large.
+var installScriptUri = 'https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1'
 
 // Reference existing host pool for role assignment and token retrieval
 resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-08-preview' existing = {
@@ -73,7 +75,7 @@ resource sessionHosts 'Microsoft.Compute/virtualMachines@2024-07-01' = [
         imageReference: imageReference
       }
       osProfile: {
-        computerName: '${shortPrefix}${i}'
+        computerName: '${computerNamePrefix}${computerNameSeed}${i}'
         adminUsername: adminUsername
         adminPassword: adminPassword
         windowsConfiguration: {
@@ -163,7 +165,10 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -Command "[IO.File]::WriteAllText(\'C:\\Windows\\Temp\\Install-AVDAgent.ps1\',[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(\'${base64(installScriptContent)}\')));& \'C:\\Windows\\Temp\\Install-AVDAgent.ps1\' -HostPoolResourceId \'${existingHostPool.id}\'"'
+        fileUris: [
+          installScriptUri
+        ]
+        commandToExecute: format('powershell.exe -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId "{0}"', existingHostPool.id)
       }
     }
     dependsOn: [aadJoin[i], vmRoleAssignment[i]]

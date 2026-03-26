@@ -40,7 +40,7 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 - **FSLogix**: Azure Files share for user profile containers (Entra ID Kerberos auth, VNet-restricted)
 - **Networking**: Dedicated VNet with NSG, separate subnets for hosts and private endpoints
 - **Monitoring**: Log Analytics workspace for diagnostics
-- **Security**: NSG restricts RDP to VNet only, TLS 1.2 enforced on storage, no shared key access, inline CSE (no external script downloads)
+- **Security**: NSG restricts RDP to VNet only, TLS 1.2 enforced on storage, no shared key access, and a CSE-driven AVD agent install using a GitHub-hosted script to avoid Windows command-line length limits
 
 ## Prerequisites
 
