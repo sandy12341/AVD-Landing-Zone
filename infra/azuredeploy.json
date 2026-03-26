@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "859288399263012611"
+      "templateHash": "10762752318004179902"
     }
   },
   "parameters": {
@@ -905,7 +905,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "17643741770556018182"
+              "templateHash": "9975415244456826635"
             }
           },
           "parameters": {
@@ -950,6 +950,13 @@
               }
             }
           },
+          "variables": {
+            "storageNetworkAcls": {
+              "defaultAction": "Deny",
+              "bypass": "AzureServices",
+              "virtualNetworkRules": "[if(not(empty(parameters('sessionHostSubnetId'))), createArray(createObject('id', parameters('sessionHostSubnetId'), 'action', 'Allow')), createArray())]"
+            }
+          },
           "resources": [
             {
               "type": "Microsoft.Storage/storageAccounts",
@@ -966,14 +973,7 @@
                 "supportsHttpsTrafficOnly": true,
                 "allowBlobPublicAccess": false,
                 "allowSharedKeyAccess": false,
-                "azureFilesIdentityBasedAuthentication": {
-                  "directoryServiceOptions": "AADKERB"
-                },
-                "networkAcls": {
-                  "defaultAction": "Deny",
-                  "bypass": "AzureServices",
-                  "virtualNetworkRules": "[if(not(empty(parameters('sessionHostSubnetId'))), createArray(createObject('id', parameters('sessionHostSubnetId'), 'action', 'Allow')), createArray())]"
-                }
+                "networkAcls": "[variables('storageNetworkAcls')]"
               }
             },
             {
@@ -981,7 +981,8 @@
               "apiVersion": "2023-05-01",
               "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                "[resourceId('Microsoft.Resources/deployments', 'configure-fslogix-auth')]"
               ]
             },
             {
@@ -993,8 +994,103 @@
                 "enabledProtocols": "SMB"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccountName'), 'default')]"
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Resources/deployments', 'configure-fslogix-auth')]"
               ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "configure-fslogix-auth",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "storageAccountName": {
+                    "value": "[parameters('storageAccountName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "tags": {
+                    "value": "[parameters('tags')]"
+                  },
+                  "sessionHostSubnetId": {
+                    "value": "[parameters('sessionHostSubnetId')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.41.2.15936",
+                      "templateHash": "9479281706004445664"
+                    }
+                  },
+                  "parameters": {
+                    "storageAccountName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Storage account name for FSLogix profiles"
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Azure region"
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Tags for all resources"
+                      }
+                    },
+                    "sessionHostSubnetId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Session host subnet ID for VNet service endpoint access"
+                      }
+                    }
+                  },
+                  "variables": {
+                    "storageNetworkAcls": {
+                      "defaultAction": "Deny",
+                      "bypass": "AzureServices",
+                      "virtualNetworkRules": "[if(not(empty(parameters('sessionHostSubnetId'))), createArray(createObject('id', parameters('sessionHostSubnetId'), 'action', 'Allow')), createArray())]"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Storage/storageAccounts",
+                      "apiVersion": "2023-05-01",
+                      "name": "[parameters('storageAccountName')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "kind": "StorageV2",
+                      "sku": {
+                        "name": "Standard_LRS"
+                      },
+                      "properties": {
+                        "minimumTlsVersion": "TLS1_2",
+                        "supportsHttpsTrafficOnly": true,
+                        "allowBlobPublicAccess": false,
+                        "allowSharedKeyAccess": false,
+                        "azureFilesIdentityBasedAuthentication": {
+                          "directoryServiceOptions": "AADKERB"
+                        },
+                        "networkAcls": "[variables('storageNetworkAcls')]"
+                      }
+                    }
+                  ]
+                }
+              }
             }
           ],
           "outputs": {

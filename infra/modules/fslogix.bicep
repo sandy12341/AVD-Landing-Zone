@@ -16,6 +16,17 @@ param tags object = {}
 @description('Session host subnet ID for VNet service endpoint access')
 param sessionHostSubnetId string = ''
 
+var storageNetworkAcls = {
+  defaultAction: 'Deny'
+  bypass: 'AzureServices'
+  virtualNetworkRules: !empty(sessionHostSubnetId) ? [
+    {
+      id: sessionHostSubnetId
+      action: 'Allow'
+    }
+  ] : []
+}
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -29,25 +40,24 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     supportsHttpsTrafficOnly: true
     allowBlobPublicAccess: false
     allowSharedKeyAccess: false
-    azureFilesIdentityBasedAuthentication: {
-      directoryServiceOptions: 'AADKERB'
-    }
-    networkAcls: {
-      defaultAction: 'Deny'
-      bypass: 'AzureServices'
-      virtualNetworkRules: !empty(sessionHostSubnetId) ? [
-        {
-          id: sessionHostSubnetId
-          action: 'Allow'
-        }
-      ] : []
-    }
+    networkAcls: storageNetworkAcls
+  }
+}
+
+module storageAccountAuth './fslogixAuth.bicep' = {
+  name: 'configure-fslogix-auth'
+  params: {
+    storageAccountName: storageAccountName
+    location: location
+    tags: tags
+    sessionHostSubnetId: sessionHostSubnetId
   }
 }
 
 resource fileServices 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
   parent: storageAccount
   name: 'default'
+  dependsOn: [storageAccountAuth]
 }
 
 resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
@@ -57,6 +67,7 @@ resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-0
     shareQuota: fileShareQuotaGiB
     enabledProtocols: 'SMB'
   }
+  dependsOn: [storageAccountAuth]
 }
 
 output storageAccountId string = storageAccount.id
