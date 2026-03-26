@@ -131,8 +131,11 @@ This is the recommended method. It requires **no tooling** — just a browser.
    | Host Pool Type | `Pooled` | `Pooled` or `Personal` |
    | Admin Username | `avdadmin` | Local admin for VMs |
    | Admin Password | `(secure value)` | Must meet Azure complexity requirements |
+  | Storage Account Name | `stavdmyappdev001` | Required when FSLogix is enabled. Must be globally unique, 3-24 chars, lowercase letters and numbers only. |
    | Deploy FSLogix | `true` | Creates Azure Files storage for profiles |
    | Deploy Monitoring | `true` | Creates Log Analytics workspace |
+
+  The portal no longer supplies a default `storageAccountName`. The user must enter a unique value during deployment to avoid collisions with existing storage accounts.
 
 3. **Click "Review + Create"**, then **"Create"**. The deployment takes approximately **5–7 minutes**.
 
@@ -154,7 +157,8 @@ az deployment group create \
                vmSize='Standard_D2ads_v5' \
                hostPoolType='Pooled' \
                adminUsername='avdadmin' \
-               adminPassword='YourSecurePassword123!'
+               adminPassword='YourSecurePassword123!' \
+               storageAccountName='stavdmyappdev001'
 ```
 
 ### 2.4 Option C: Local Bicep Deployment (for Developers)
@@ -169,7 +173,7 @@ az deployment group create \
   --resource-group rg-avd-myapp-dev \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json \
-  --parameters adminPassword='YourSecurePassword123!'
+  --parameters adminPassword='YourSecurePassword123!' storageAccountName='stavdmyappdev001'
 ```
 
 ### 2.5 Deployment Module Execution Order
@@ -204,6 +208,8 @@ main.bicep (orchestrator)
 ```
 
 > **Key dependency**: The Custom Script Extension (`InstallAVDAgent`) has an explicit `dependsOn` on both the Entra ID Join extension and the Role Assignment. This ensures the VM has its managed identity role active before it attempts to retrieve the registration token.
+
+> **Computer name uniqueness**: The session host module now includes a per-deployment seed when generating the Windows computer name. This prevents a fresh redeployment into the same resource group name from reusing the same Entra device hostname and hitting `error_hostname_duplicate` during `AADLoginForWindows`.
 
 ---
 

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "1979591661416567489"
+      "templateHash": "17174163753802799271"
     }
   },
   "parameters": {
@@ -85,7 +85,6 @@
     },
     "storageAccountName": {
       "type": "string",
-      "defaultValue": "stavdavd1dev",
       "minLength": 3,
       "maxLength": 24,
       "metadata": {
@@ -125,6 +124,13 @@
       "defaultValue": "",
       "metadata": {
         "description": "Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments."
+      }
+    },
+    "deploymentInstanceSeed": {
+      "type": "string",
+      "defaultValue": "[utcNow('u')]",
+      "metadata": {
+        "description": "Per-deployment seed used to keep session host computer names unique across redeployments in the same resource group."
       }
     }
   },
@@ -607,6 +613,9 @@
           "adminPassword": {
             "value": "[parameters('adminPassword')]"
           },
+          "deploymentInstanceSeed": {
+            "value": "[parameters('deploymentInstanceSeed')]"
+          },
           "vmNamePrefix": {
             "value": "[format('vm-avd-{0}', variables('namingPrefix'))]"
           },
@@ -621,7 +630,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "16951138657518598974"
+              "templateHash": "1308884628312391098"
             }
           },
           "parameters": {
@@ -696,11 +705,17 @@
               "metadata": {
                 "description": "Name prefix for session hosts"
               }
+            },
+            "deploymentInstanceSeed": {
+              "type": "string",
+              "metadata": {
+                "description": "Per-deployment seed used to avoid reusing the same computer name across redeployments in the same resource group"
+              }
             }
           },
           "variables": {
             "computerNamePrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 10)]",
-            "computerNameSeed": "[take(uniqueString(resourceGroup().id), 4)]",
+            "computerNameSeed": "[take(uniqueString(resourceGroup().id, parameters('deploymentInstanceSeed')), 4)]",
             "installScriptUri": "https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1",
             "desktopVirtContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '082f0a83-3be5-4ba1-904c-961cca79b387')]"
           },

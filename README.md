@@ -54,6 +54,12 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 
 Click the **Deploy to Azure** button above for a guided deployment experience.
 
+Important:
+
+- `storageAccountName` is a required free-form field in the portal
+- you must enter a globally unique name during deployment
+- the template no longer provides a default storage account name
+
 ### Option 2: Azure CLI
 
 ```bash
@@ -65,7 +71,7 @@ az deployment group create \
   --resource-group rg-avd-avd1-dev \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json \
-  --parameters adminPassword='<secure-password>'
+  --parameters adminPassword='<secure-password>' storageAccountName='<globally-unique-storage-name>'
 ```
 
 ### Option 3: PowerShell
@@ -79,7 +85,8 @@ New-AzResourceGroupDeployment `
   -ResourceGroupName "rg-avd-avd1-dev" `
   -TemplateFile "infra/main.bicep" `
   -TemplateParameterFile "infra/main.parameters.json" `
-  -adminPassword (Read-Host -AsSecureString "Admin Password")
+  -adminPassword (Read-Host -AsSecureString "Admin Password") `
+  -storageAccountName "<globally-unique-storage-name>"
 ```
 
 ## Parameters
@@ -94,7 +101,7 @@ New-AzResourceGroupDeployment `
 | `adminUsername` | string | `avdadmin` | Local admin username |
 | `adminPassword` | secureString | - | Local admin password (required) |
 | `deployFSLogix` | bool | `true` | Deploy FSLogix Azure Files storage |
-| `storageAccountName` | string | `stavd<prefix><env>` | Storage account name for FSLogix (globally unique, 3-24 chars) |
+| `storageAccountName` | string | - | Required unique storage account name for FSLogix (globally unique, 3-24 chars) |
 | `deployMonitoring` | bool | `true` | Deploy Log Analytics workspace |
 | `avdUserObjectId` | string | _(empty)_ | Entra Object ID of user to grant AVD access (leave empty to skip). Get via: `az ad user show --id user@domain.com --query id -o tsv` |
 

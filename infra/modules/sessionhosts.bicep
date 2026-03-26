@@ -36,9 +36,12 @@ param tags object = {}
 @description('Name prefix for session hosts')
 param vmNamePrefix string = 'vm-avd'
 
+@description('Per-deployment seed used to avoid reusing the same computer name across redeployments in the same resource group')
+param deploymentInstanceSeed string
+
 // Derive a deployment-unique computer name (max 15 chars) to avoid stale Entra device hostname collisions.
 var computerNamePrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 10)
-var computerNameSeed = take(uniqueString(resourceGroup().id), 4)
+var computerNameSeed = take(uniqueString(resourceGroup().id, deploymentInstanceSeed), 4)
 
 // Download the install script at runtime to avoid overflowing the Windows command-line
 // limit in Custom Script Extension when the script content is large.

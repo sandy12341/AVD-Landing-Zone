@@ -36,6 +36,7 @@ The portal form is generated from the template parameters.
 - Region
 - `adminUsername`
 - `adminPassword`
+- `storageAccountName` when `deployFSLogix` is `true`
 
 ### Common optional inputs
 
@@ -45,7 +46,6 @@ The portal form is generated from the template parameters.
 - `vmSize`
 - `hostPoolType`
 - `deployFSLogix`
-- `storageAccountName`
 - `deployMonitoring`
 - `vnetAddressPrefix`
 - `sessionHostSubnetPrefix`
@@ -59,6 +59,12 @@ The portal form is generated from the template parameters.
 - `hostPoolType`: `Pooled` or `Personal`
 - `storageAccountName`: 3 to 24 characters, globally unique, lowercase letters and numbers only
 - `adminPassword`: must satisfy Azure password complexity rules
+
+Portal behavior:
+
+- the Deploy to Azure form does not prefill `storageAccountName`
+- the user must type a unique storage account name as part of the deployment
+- this avoids collisions caused by reusing the old default value
 
 When the user clicks **Review + create**, Azure Resource Manager performs preflight validation. When the user clicks **Create**, the deployment starts.
 
@@ -218,6 +224,18 @@ Each session host VM uses:
 The Azure VM resource name remains stable, for example:
 
 - `vm-avd-avd1-dev-0`
+
+The Windows computer name inside the VM is generated separately and includes a per-deployment seed so that a redeploy into the same resource group name does not reuse the same Entra device hostname.
+
+Example shape:
+
+- `avdavd1dev<seed>0`
+
+Why this matters:
+
+- deleting and recreating the same resource group name can otherwise reproduce the same device hostname
+- stale Entra device objects can then block `AADLoginForWindows` with `error_hostname_duplicate`
+- the deployment seed prevents that collision on fresh redeployments
 
 But the in-guest Windows computer name is generated from:
 

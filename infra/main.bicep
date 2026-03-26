@@ -44,7 +44,7 @@ param deployFSLogix bool = true
 @description('Storage account name for FSLogix profiles (must be globally unique, 3-24 chars, lowercase/numbers only)')
 @minLength(3)
 @maxLength(24)
-param storageAccountName string = 'stavdavd1dev'
+param storageAccountName string
 
 @description('Deploy monitoring (Log Analytics)')
 param deployMonitoring bool = true
@@ -60,6 +60,9 @@ param privateEndpointSubnetPrefix string = '10.20.2.0/24'
 
 @description('Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments.')
 param avdUserObjectId string = ''
+
+@description('Per-deployment seed used to keep session host computer names unique across redeployments in the same resource group.')
+param deploymentInstanceSeed string = utcNow('u')
 
 // ── Variables ──
 
@@ -110,6 +113,7 @@ module sessionHosts 'modules/sessionhosts.bicep' = {
     hostPoolName: hostPool.outputs.hostPoolName
     adminUsername: adminUsername
     adminPassword: adminPassword
+    deploymentInstanceSeed: deploymentInstanceSeed
     vmNamePrefix: 'vm-avd-${namingPrefix}'
     tags: tags
   }
