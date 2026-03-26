@@ -1,7 +1,7 @@
 # AVD Landing Zone — Deployment Manual
 
-> **Version:** 1.0  
-> **Last Updated:** March 24, 2026  
+> **Version:** 1.1  
+> **Last Updated:** March 26, 2026  
 > **Repository:** `sandy12341/AVD-Landing-Zone`
 
 ---
@@ -94,7 +94,7 @@ The deployment is fully automated — a single ARM template deployment creates a
 │                                                                          │
 │  T+0s     ARM deployment begins                                         │
 │  T+10s    Networking module completes (VNet, Subnets, NSG)               │
-│  T+20s    Host Pool + Application Group + Workspace created              │
+│  T+20s    Host Pool + Desktop/RemoteApp Groups + Workspace created       │
 │  T+30s    Session Host VMs begin provisioning                            │
 │  T+60s    NICs created, VMs provisioning in parallel                     │
 │  T+90s    Entra ID Join extension installs on each VM                    │
@@ -249,7 +249,7 @@ AVD-Landing-Zone/
     ├── azuredeploy.json               # Pre-compiled ARM JSON template (used by "Deploy to Azure" button)
     ├── modules/
     │   ├── network.bicep              # Virtual Network, Subnets, NSG
-    │   ├── hostpool.bicep             # Host Pool, Application Group, Workspace
+    │   ├── hostpool.bicep             # Host Pool, Desktop/RemoteApp Groups, published apps, Workspace
     │   ├── sessionhosts.bicep         # VMs, NICs, Entra ID Join, AVD Agent, Role Assignments
     │   ├── fslogix.bicep              # Azure Files storage for user profiles
     │   └── monitoring.bicep           # Log Analytics workspace
@@ -290,6 +290,8 @@ AVD-Landing-Zone/
 - `environment`: `dev`
 - `sessionHostCount`: `1`
 - `vmSize`: `Standard_D2ads_v5`
+- `avdMode`: empty, which preserves the legacy desktop-only `hostPoolType` behavior
+- `remoteApps`: empty array
 - `adminPassword`: **Not included** — must be supplied at deploy time for security
 
 ### 3.2.1 `infra/samples/*.parameters.json` — Mode-Specific Samples
@@ -339,16 +341,18 @@ az bicep build --file infra/main.bicep --outfile infra/azuredeploy.json
 
 **Outputs:** `vnetId`, `sessionHostSubnetId`, `privateEndpointSubnetId`
 
-### 3.5 `infra/modules/hostpool.bicep` — Host Pool, App Group & Workspace
+### 3.5 `infra/modules/hostpool.bicep` — Host Pool, Application Groups, Published Apps & Workspace
 
-**Purpose:** Creates the AVD control plane resources — the logical container for session hosts and the workspace that users see when they connect.
+**Purpose:** Creates the AVD control plane resources — the logical container for session hosts, the application groups users are assigned to, the optional published RemoteApps, and the workspace users see when they connect.
 
 **Resources Created:**
 
 | Resource | Type | Details |
 |---|---|---|
 | **Host Pool** | `Microsoft.DesktopVirtualization/hostPools` | Load balancer: BreadthFirst. Max sessions: 10. Start VM on Connect: enabled. |
-| **Application Group** | `Microsoft.DesktopVirtualization/applicationGroups` | Type: Desktop (full desktop experience). Linked to the host pool. |
+| **Desktop Application Group** | `Microsoft.DesktopVirtualization/applicationGroups` | Created when the selected mode publishes desktops. Type: `Desktop`. |
+| **RemoteApp Application Group** | `Microsoft.DesktopVirtualization/applicationGroups` | Created when the selected mode publishes RemoteApps. Type: `RemoteApp`. |
+| **Published Applications** | `Microsoft.DesktopVirtualization/applicationGroups/applications` | Created only for RemoteApp modes. One child resource per `remoteApps` entry. |
 | **Workspace** | `Microsoft.DesktopVirtualization/workspaces` | References the Application Group. This is what users see in the Windows App / Web Client. |
 
 **Key Configuration Details:**
@@ -367,7 +371,13 @@ az bicep build --file infra/main.bicep --outfile infra/azuredeploy.json
 
 - **Registration Token:** The host pool is configured with `registrationTokenOperation: 'Update'` and an expiration time of **48 hours** from deployment time. This token is **not** output from the template — instead, session host VMs retrieve it dynamically at deployment time using their managed identity (see Section 4).
 
-**Outputs:** `hostPoolId`, `hostPoolName`, `appGroupId`, `workspaceId`
+- **Delivery Modes:** The module supports:
+  - `PersonalDesktop`
+  - `PooledRemoteApp`
+  - `PooledDesktopAndRemoteApp`
+  - legacy desktop-only fallback when `avdMode` is empty
+
+**Outputs:** `hostPoolId`, `hostPoolName`, `desktopAppGroupId`, `remoteAppGroupId`, `publishedAppGroupIds`, `workspaceId`
 
 ### 3.6 `infra/modules/sessionhosts.bicep` — Session Host VMs
 
@@ -385,9 +395,9 @@ az bicep build --file infra/main.bicep --outfile infra/azuredeploy.json
 
 **Computer Name Logic:**
 - ARM imposes a 15-character limit on Windows computer names.
-- The `shortPrefix` variable strips `vm-` and hyphens from `vmNamePrefix`, then takes the first 12 characters.
-- Final computer name: `{shortPrefix}{index}` (e.g., `avdmyappdev0`).
-- This prevents hostname collision errors when deploying multiple environments.
+- The module derives a compact prefix from the VM name, then appends a short per-deployment seed and the VM index.
+- Final computer name pattern: `{computerNamePrefix}{computerNameSeed}{index}`.
+- This prevents hostname reuse across redeployments into the same resource group name, which avoids stale Entra device collisions such as `error_hostname_duplicate`.
 
 **Extension Dependency Chain:**
 ```
@@ -599,7 +609,7 @@ Each session host VM has the `AADLoginForWindows` extension (version 2.2) which:
 - Enables Entra ID-based RDP authentication (SSO)
 - Creates a device object in the Entra ID directory (visible under **Devices** in the Entra portal)
 
-> **Cleanup note:** When you delete the resource group, the **Entra ID device objects are NOT automatically deleted**. You must manually remove them from the Entra ID portal or via the Graph API to avoid stale device records.
+> **Cleanup note:** When you delete the resource group, Entra device cleanup is not guaranteed to happen immediately or automatically in every scenario. If a future redeployment hits hostname duplication, inspect and remove stale device objects from Entra ID or redeploy with a different seeded hostname.
 
 ### 4.5 Resource Summary — What Gets Deployed
 
@@ -610,14 +620,15 @@ For a deployment with `deploymentPrefix=myapp`, `environment=dev`, `sessionHostC
 | 1 | `vnet-avd-myapp-dev` | Virtual Network | Network isolation |
 | 2 | `nsg-avd-sessionhosts` | Network Security Group | Firewall rules |
 | 3 | `hp-avd-myapp-dev` | Host Pool | AVD session host container |
-| 4 | `dag-avd-myapp-dev` | Application Group | Desktop app group |
-| 5 | `ws-avd-myapp-dev` | Workspace | User-facing workspace |
-| 6 | `nic-vm-avd-myapp-dev-0` | NIC | VM 0 network interface |
-| 7 | `vm-avd-myapp-dev-0` | Virtual Machine | Session host 0 |
-| 8 | `nic-vm-avd-myapp-dev-1` | NIC | VM 1 network interface |
-| 9 | `vm-avd-myapp-dev-1` | Virtual Machine | Session host 1 |
-| 10 | `stavdmyappdev` | Storage Account | FSLogix profiles |
-| 11 | `log-avd-myapp-dev` | Log Analytics Workspace | Monitoring |
+| 4 | `dag-avd-myapp-dev` | Application Group | Desktop app group when desktops are published |
+| 5 | `rag-avd-myapp-dev` | Application Group | RemoteApp app group when RemoteApps are published |
+| 6 | `ws-avd-myapp-dev` | Workspace | User-facing workspace |
+| 7 | `nic-vm-avd-myapp-dev-0` | NIC | VM 0 network interface |
+| 8 | `vm-avd-myapp-dev-0` | Virtual Machine | Session host 0 |
+| 9 | `nic-vm-avd-myapp-dev-1` | NIC | VM 1 network interface |
+| 10 | `vm-avd-myapp-dev-1` | Virtual Machine | Session host 1 |
+| 11 | `stavdmyappdev` | Storage Account | FSLogix profiles |
+| 12 | `log-avd-myapp-dev` | Log Analytics Workspace | Monitoring |
 
 Plus per-VM: OS Disk (managed), Entra ID device registration, RBAC role assignment.
 
@@ -625,19 +636,30 @@ Plus per-VM: OS Disk (managed), Entra ID device registration, RBAC role assignme
 
 ## 5. Post-Deployment Configuration & Troubleshooting
 
-### 5.1 Required Post-Deployment Steps
+### 5.1 Post-Deployment Role Assignment
 
-After the template deployment succeeds, you need to assign **two RBAC roles** to allow users to connect:
+If you provide `avdUserObjectId` during deployment, the template assigns the end-user RBAC automatically and no further user-access step is required.
+
+If you leave `avdUserObjectId` empty, assign the required roles after deployment.
 
 #### A. Desktop Virtualization User (on the Application Group)
 
-Grants the user permission to see and launch the desktop in the AVD client.
+Grants the user permission to see and launch the published desktop or RemoteApps in the AVD client.
 
 ```bash
 az role assignment create \
   --assignee "user@yourdomain.com" \
   --role "Desktop Virtualization User" \
   --scope "/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.DesktopVirtualization/applicationGroups/dag-avd-{prefix}-{env}"
+```
+
+For RemoteApp-only deployments, use the RemoteApp application group scope instead:
+
+```bash
+az role assignment create \
+  --assignee "user@yourdomain.com" \
+  --role "Desktop Virtualization User" \
+  --scope "/subscriptions/{sub-id}/resourceGroups/{rg-name}/providers/Microsoft.DesktopVirtualization/applicationGroups/rag-avd-{prefix}-{env}"
 ```
 
 #### B. Virtual Machine User Login (on the Resource Group)
@@ -652,6 +674,8 @@ az role assignment create \
 ```
 
 > **For admin access**, use the `Virtual Machine Administrator Login` role instead.
+
+> **Mode note:** In `PooledDesktopAndRemoteApp`, assign `Desktop Virtualization User` on both application groups if the same user should see both the desktop and the RemoteApps.
 
 ### 5.2 Connecting to AVD
 
@@ -678,9 +702,11 @@ Expected output:
 ```
 Name                             Status     Agent            Heartbeat
 -------------------------------  ---------  ---------------  -------------------------
-hp-avd-myapp-dev/avdmyappdev0   Available  1.0.13229.200    2026-03-24T12:00:00.000Z
-hp-avd-myapp-dev/avdmyappdev1   Available  1.0.13229.200    2026-03-24T12:00:00.000Z
+hp-avd-myapp-dev/avdmyappdevx0  Available  1.0.13229.200    2026-03-26T12:00:00.000Z
+hp-avd-myapp-dev/avdmyappdevx1  Available  1.0.13229.200    2026-03-26T12:00:00.000Z
 ```
+
+The session host name includes the deployment seed, so the exact hostname suffix varies per deployment.
 
 ### 5.4 Troubleshooting
 
@@ -690,7 +716,7 @@ hp-avd-myapp-dev/avdmyappdev1   Available  1.0.13229.200    2026-03-24T12:00:00.
 | CSE failed with **URI parsing error** | Quoting issue in the CSE command | Ensure `HostPoolResourceId` is passed with double quotes, not single quotes |
 | CSE failed with **Access denied** | Role assignment hasn't propagated yet | The script retries 18 times (3 min). If still failing, manually rerun the CSE |
 | CSE timed out | Outbound internet blocked | Check NSG/firewall allows HTTPS to `management.azure.com`, `169.254.169.254`, and CDN |
-| Entra ID device not cleaned up after RG deletion | Expected behavior — Entra ID devices persist | Delete manually: Entra Portal → Devices, or `az rest --method DELETE --url "https://graph.microsoft.com/v1.0/devices/{device-id}"` |
+| Fresh redeploy hits `error_hostname_duplicate` | A stale Entra device object still matches the previous hostname | Delete the stale device object or redeploy again so the per-deployment computer-name seed changes |
 | User can't see desktop in AVD client | Missing role assignment | Assign `Desktop Virtualization User` on the Application Group |
 | User sees desktop but gets **access denied** on connect | Missing VM login role | Assign `Virtual Machine User Login` on the Resource Group |
 | Registration token expired | Token is valid for 48 hours from deployment time | Rerun the CSE or redeploy session hosts |

@@ -1,6 +1,6 @@
 # Azure Virtual Desktop + Landing Zone
 
-Production-ready Azure Virtual Desktop deployment with Landing Zone architecture. Includes host pool provisioning, FSLogix profile containers, Entra ID join, network segmentation, and monitoring — aligned with Cloud Adoption Framework (CAF) best practices.
+Production-ready Azure Virtual Desktop deployment with Landing Zone architecture. Includes validated `PersonalDesktop`, `PooledRemoteApp`, and `PooledDesktopAndRemoteApp` delivery modes, FSLogix profile containers, Entra ID join, network segmentation, and monitoring.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fazuredeploy.json)
 
@@ -22,7 +22,7 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 │  └─────────────────┘  │  Session Host VMs                │  │
 │                        │  ├─ Windows 11 Multi-Session     │  │
 │  ┌─────────────────┐  │  ├─ Entra ID Joined              │  │
-│  │  FSLogix Storage │  │  └─ AVD Agent (DSC)              │  │
+│  │  FSLogix Storage │  │  └─ AVD Agent (Custom Script)   │  │
 │  │  (Azure Files)   │  └─────────────────────────────────┘  │
 │  └─────────────────┘                                        │
 │                        ┌─────────────────────────────────┐  │
@@ -42,6 +42,7 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 - **Networking**: Dedicated VNet with NSG, separate subnets for hosts and private endpoints
 - **Monitoring**: Log Analytics workspace for diagnostics
 - **Application Publishing**: Desktop app group, RemoteApp app group, or both from the same template
+- **Access Assignment**: When `avdUserObjectId` is provided, the template assigns `Desktop Virtualization User` on the published app groups and `Virtual Machine User Login` on the resource group
 - **Security**: NSG restricts RDP to VNet only, TLS 1.2 enforced on storage, no shared key access, and a CSE-driven AVD agent install using a GitHub-hosted script to avoid Windows command-line length limits
 
 ## Prerequisites
@@ -61,6 +62,7 @@ Important:
 - `storageAccountName` is a required free-form field in the portal
 - you must enter a globally unique name during deployment
 - the template no longer provides a default storage account name
+- `remoteApps` is only used when `avdMode` publishes RemoteApps
 
 ### Option 2: Azure CLI
 
@@ -68,12 +70,14 @@ Important:
 # Create resource group
 az group create --name rg-avd-avd1-dev --location westus2
 
-# Deploy
+# Deploy with a mode-specific sample file
 az deployment group create \
   --resource-group rg-avd-avd1-dev \
   --template-file infra/main.bicep \
-  --parameters infra/main.parameters.json \
-  --parameters adminPassword='<secure-password>' storageAccountName='<globally-unique-storage-name>'
+  --parameters @infra/samples/main.pooleddesktopandremoteapp.parameters.json \
+  --parameters adminPassword='<secure-password>' \
+               storageAccountName='<globally-unique-storage-name>' \
+               avdUserObjectId='<entra-object-id>'
 ```
 
 ### Option 3: PowerShell
@@ -82,13 +86,14 @@ az deployment group create \
 # Create resource group
 New-AzResourceGroup -Name "rg-avd-avd1-dev" -Location "westus2"
 
-# Deploy
+# Deploy with a mode-specific sample file
 New-AzResourceGroupDeployment `
   -ResourceGroupName "rg-avd-avd1-dev" `
   -TemplateFile "infra/main.bicep" `
-  -TemplateParameterFile "infra/main.parameters.json" `
+  -TemplateParameterFile "infra/samples/main.pooleddesktopandremoteapp.parameters.json" `
   -adminPassword (Read-Host -AsSecureString "Admin Password") `
-  -storageAccountName "<globally-unique-storage-name>"
+  -storageAccountName "<globally-unique-storage-name>" `
+  -avdUserObjectId "<entra-object-id>"
 ```
 
 ## Parameters
@@ -108,6 +113,8 @@ New-AzResourceGroupDeployment `
 | `deployMonitoring` | bool | `true` | Deploy Log Analytics workspace |
 | `avdUserObjectId` | string | _(empty)_ | Entra Object ID of user to grant AVD access (leave empty to skip). Get via: `az ad user show --id user@domain.com --query id -o tsv` |
 | `remoteApps` | array | `[]` | RemoteApp definitions used when `avdMode` publishes RemoteApps |
+
+If `avdUserObjectId` is supplied, the template assigns end-user access automatically. If it is left empty, assign access after deployment.
 
 ### RemoteApp example
 
@@ -146,8 +153,14 @@ az deployment group create \
 
 ## Connecting to AVD
 
+- If `avdUserObjectId` was left empty, assign `Desktop Virtualization User` on the published application group and `Virtual Machine User Login` on the resource group before testing access
 - **Web Client**: [https://client.wvd.microsoft.com](https://client.wvd.microsoft.com/arm/webclient/index.html)
 - **Windows App / RD Client**: [Download](https://aka.ms/AVDClientDownload)
+
+## Documentation
+
+- `docs/Click2Deploy.md`: end-to-end Deploy-to-Azure portal flow and runtime behavior
+- `docs/Deployment-Manual.md`: detailed deployment guide, architecture notes, and troubleshooting
 
 ## Related
 

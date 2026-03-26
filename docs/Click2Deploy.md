@@ -331,13 +331,19 @@ This is the current hardened registration path. It avoids passing the registrati
 
 If `avdUserObjectId` is provided, the deployment also grants the user access.
 
-Two user-facing role assignments are created:
+The template creates the user-facing role assignments that match the selected delivery mode:
 
-1. `Desktop Virtualization User`
-   - scope: the desktop application group
+1. `Desktop Virtualization User` on the desktop application group
+   - created when the selected mode publishes desktops
+   - scope: `dag-avd-<prefix>-<env>`
    - purpose: allows the user to access the published desktop
 
-2. `Virtual Machine User Login`
+2. `Desktop Virtualization User` on the RemoteApp application group
+   - created when the selected mode publishes RemoteApps
+   - scope: `rag-avd-<prefix>-<env>`
+   - purpose: allows the user to access the published RemoteApps
+
+3. `Virtual Machine User Login`
    - scope: the resource group
    - purpose: allows Entra-based sign-in to the VMs
 
@@ -373,13 +379,19 @@ A successful deployment ends with:
   - `MetaDataServiceCheck`
   - `SxSStackListenerCheck`
 
+Validated modes in this repo:
+
+- `PersonalDesktop`: desktop app group only
+- `PooledRemoteApp`: RemoteApp app group only
+- `PooledDesktopAndRemoteApp`: both desktop and RemoteApp groups
+
 In the latest validated fresh deployment, the resulting session host reached `Available` without requiring manual cleanup of stale Entra device objects.
 
 ---
 
 ## 13. Typical resource inventory created
 
-For a single session host deployment with FSLogix and monitoring enabled, the resource group contains:
+For a single session host deployment with FSLogix and monitoring enabled, the resource group always contains:
 
 - 1 virtual machine
 - 1 managed disk
@@ -390,12 +402,17 @@ For a single session host deployment with FSLogix and monitoring enabled, the re
 - 1 public IP for the NAT gateway
 - 1 virtual network
 - 1 host pool
-- 1 desktop application group
 - 1 workspace
 - 1 storage account
 - 1 Azure Files share
 - 1 Log Analytics workspace
 - supporting role assignments
+
+Application publishing depends on `avdMode`:
+
+- `PersonalDesktop`: 1 desktop application group
+- `PooledRemoteApp`: 1 RemoteApp application group plus one published application resource per `remoteApps` entry
+- `PooledDesktopAndRemoteApp`: 1 desktop application group, 1 RemoteApp application group, plus one published application resource per `remoteApps` entry
 
 Representative resource names:
 
@@ -405,6 +422,7 @@ Representative resource names:
 - `nsg-avd-sessionhosts`
 - `hp-avd-avd1-dev`
 - `dag-avd-avd1-dev`
+- `rag-avd-avd1-dev`
 - `ws-avd-avd1-dev`
 - `log-avd-avd1-dev`
 
@@ -418,6 +436,10 @@ The deployment outputs:
 
 - `hostPoolName`
 - `workspaceId`
+- `desktopAppGroupId`
+- `remoteAppGroupId`
+- `publishedAppGroupIds`
+- `effectiveAvdMode`
 - `vnetId`
 - `sessionHostVmNames`
 - `fslogixStorageAccount`
