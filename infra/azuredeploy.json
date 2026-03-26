@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "17174163753802799271"
+      "templateHash": "9669861418726239760"
     }
   },
   "parameters": {
@@ -51,6 +51,19 @@
       "defaultValue": "Standard_D2ads_v5",
       "metadata": {
         "description": "VM size for session hosts"
+      }
+    },
+    "avdMode": {
+      "type": "string",
+      "defaultValue": "",
+      "allowedValues": [
+        "",
+        "PersonalDesktop",
+        "PooledRemoteApp",
+        "PooledDesktopAndRemoteApp"
+      ],
+      "metadata": {
+        "description": "Preferred AVD delivery mode. Leave empty to preserve the legacy desktop-only behavior driven by hostPoolType."
       }
     },
     "hostPoolType": {
@@ -126,6 +139,13 @@
         "description": "Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments."
       }
     },
+    "remoteApps": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "RemoteApp definitions used when avdMode publishes RemoteApps. Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments."
+      }
+    },
     "deploymentInstanceSeed": {
       "type": "string",
       "defaultValue": "[utcNow('u')]",
@@ -136,6 +156,12 @@
   },
   "variables": {
     "namingPrefix": "[format('{0}-{1}', parameters('deploymentPrefix'), parameters('environment'))]",
+    "effectiveAvdMode": "[if(empty(parameters('avdMode')), if(equals(parameters('hostPoolType'), 'Personal'), 'PersonalDesktop', 'PooledDesktop'), parameters('avdMode'))]",
+    "effectiveHostPoolType": "[if(equals(variables('effectiveAvdMode'), 'PersonalDesktop'), 'Personal', 'Pooled')]",
+    "publishDesktop": "[or(or(equals(variables('effectiveAvdMode'), 'PersonalDesktop'), equals(variables('effectiveAvdMode'), 'PooledDesktop')), equals(variables('effectiveAvdMode'), 'PooledDesktopAndRemoteApp'))]",
+    "publishRemoteApps": "[or(equals(variables('effectiveAvdMode'), 'PooledRemoteApp'), equals(variables('effectiveAvdMode'), 'PooledDesktopAndRemoteApp'))]",
+    "desktopAppGroupName": "[format('dag-avd-{0}', variables('namingPrefix'))]",
+    "remoteAppGroupName": "[format('rag-avd-{0}', variables('namingPrefix'))]",
     "tags": {
       "Environment": "[parameters('environment')]",
       "Project": "AVD-Landing-Zone",
@@ -143,12 +169,32 @@
     }
   },
   "resources": {
-    "avdUserRole": {
-      "condition": "[not(empty(parameters('avdUserObjectId')))]",
+    "desktopAppGroup": {
+      "condition": "[variables('publishDesktop')]",
+      "existing": true,
+      "type": "Microsoft.DesktopVirtualization/applicationGroups",
+      "apiVersion": "2024-04-08-preview",
+      "name": "[variables('desktopAppGroupName')]",
+      "dependsOn": [
+        "hostPool"
+      ]
+    },
+    "remoteAppGroup": {
+      "condition": "[variables('publishRemoteApps')]",
+      "existing": true,
+      "type": "Microsoft.DesktopVirtualization/applicationGroups",
+      "apiVersion": "2024-04-08-preview",
+      "name": "[variables('remoteAppGroupName')]",
+      "dependsOn": [
+        "hostPool"
+      ]
+    },
+    "desktopAvdUserRole": {
+      "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishDesktop'))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', format('dag-avd-{0}', variables('namingPrefix')))]",
-      "name": "[guid(resourceGroup().id, format('dag-avd-{0}', variables('namingPrefix')), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+      "scope": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', variables('desktopAppGroupName'))]",
+      "name": "[guid(resourceGroup().id, variables('desktopAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
         "principalId": "[parameters('avdUserObjectId')]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
@@ -158,11 +204,17 @@
         "hostPool"
       ]
     },
-    "appGroup": {
-      "existing": true,
-      "type": "Microsoft.DesktopVirtualization/applicationGroups",
-      "apiVersion": "2024-04-08-preview",
-      "name": "[format('dag-avd-{0}', variables('namingPrefix'))]",
+    "remoteAppAvdUserRole": {
+      "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishRemoteApps'))]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', variables('remoteAppGroupName'))]",
+      "name": "[guid(resourceGroup().id, variables('remoteAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+      "properties": {
+        "principalId": "[parameters('avdUserObjectId')]",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+        "principalType": "User"
+      },
       "dependsOn": [
         "hostPool"
       ]
@@ -409,13 +461,25 @@
             "value": "[format('hp-avd-{0}', variables('namingPrefix'))]"
           },
           "hostPoolType": {
-            "value": "[parameters('hostPoolType')]"
+            "value": "[variables('effectiveHostPoolType')]"
           },
           "workspaceName": {
             "value": "[format('ws-avd-{0}', variables('namingPrefix'))]"
           },
-          "appGroupName": {
-            "value": "[format('dag-avd-{0}', variables('namingPrefix'))]"
+          "desktopAppGroupName": {
+            "value": "[variables('desktopAppGroupName')]"
+          },
+          "remoteAppGroupName": {
+            "value": "[variables('remoteAppGroupName')]"
+          },
+          "publishDesktop": {
+            "value": "[variables('publishDesktop')]"
+          },
+          "publishRemoteApps": {
+            "value": "[variables('publishRemoteApps')]"
+          },
+          "remoteApps": {
+            "value": "[parameters('remoteApps')]"
           },
           "tags": {
             "value": "[variables('tags')]"
@@ -428,7 +492,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "2690680960831761837"
+              "templateHash": "6370157598245740493"
             }
           },
           "parameters": {
@@ -486,10 +550,39 @@
                 "description": "Workspace name"
               }
             },
-            "appGroupName": {
+            "desktopAppGroupName": {
               "type": "string",
+              "defaultValue": "",
               "metadata": {
-                "description": "Application group name"
+                "description": "Desktop application group name"
+              }
+            },
+            "remoteAppGroupName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "RemoteApp application group name"
+              }
+            },
+            "publishDesktop": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Publish a desktop application group"
+              }
+            },
+            "publishRemoteApps": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Publish a RemoteApp application group"
+              }
+            },
+            "remoteApps": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "RemoteApp definitions. Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments."
               }
             },
             "tags": {
@@ -507,6 +600,10 @@
               }
             }
           },
+          "variables": {
+            "preferredAppGroupType": "[if(parameters('publishDesktop'), 'Desktop', 'RailApplications')]",
+            "publishedAppGroupIds": "[concat(if(parameters('publishDesktop'), createArray(resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('desktopAppGroupName'))), createArray()), if(parameters('publishRemoteApps'), createArray(resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('remoteAppGroupName'))), createArray()))]"
+          },
           "resources": [
             {
               "type": "Microsoft.DesktopVirtualization/hostPools",
@@ -518,7 +615,7 @@
                 "hostPoolType": "[parameters('hostPoolType')]",
                 "loadBalancerType": "[parameters('loadBalancerType')]",
                 "maxSessionLimit": "[parameters('maxSessionLimit')]",
-                "preferredAppGroupType": "Desktop",
+                "preferredAppGroupType": "[variables('preferredAppGroupType')]",
                 "friendlyName": "[parameters('hostPoolFriendlyName')]",
                 "validationEnvironment": false,
                 "startVMOnConnect": true,
@@ -530,9 +627,10 @@
               }
             },
             {
+              "condition": "[parameters('publishDesktop')]",
               "type": "Microsoft.DesktopVirtualization/applicationGroups",
               "apiVersion": "2024-04-08-preview",
-              "name": "[parameters('appGroupName')]",
+              "name": "[parameters('desktopAppGroupName')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "properties": {
@@ -545,6 +643,43 @@
               ]
             },
             {
+              "condition": "[parameters('publishRemoteApps')]",
+              "type": "Microsoft.DesktopVirtualization/applicationGroups",
+              "apiVersion": "2024-04-08-preview",
+              "name": "[parameters('remoteAppGroupName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "applicationGroupType": "RemoteApp",
+                "hostPoolArmPath": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]",
+                "friendlyName": "AVD RemoteApp"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "remoteApplications",
+                "count": "[length(if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray()))]"
+              },
+              "type": "Microsoft.DesktopVirtualization/applicationGroups/applications",
+              "apiVersion": "2024-04-08-preview",
+              "name": "[format('{0}/{1}', parameters('remoteAppGroupName'), if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()].name)]",
+              "properties": {
+                "applicationType": "InBuilt",
+                "commandLineArguments": "[coalesce(tryGet(if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()], 'commandLineArguments'), '')]",
+                "commandLineSetting": "[coalesce(tryGet(if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()], 'commandLineSetting'), 'DoNotAllow')]",
+                "description": "[coalesce(tryGet(if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()], 'description'), 'Published RemoteApp')]",
+                "filePath": "[if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()].filePath]",
+                "friendlyName": "[coalesce(tryGet(if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()], 'friendlyName'), if(parameters('publishRemoteApps'), parameters('remoteApps'), createArray())[copyIndex()].name)]",
+                "showInPortal": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('remoteAppGroupName'))]"
+              ]
+            },
+            {
               "type": "Microsoft.DesktopVirtualization/workspaces",
               "apiVersion": "2024-04-08-preview",
               "name": "[parameters('workspaceName')]",
@@ -552,12 +687,11 @@
               "tags": "[parameters('tags')]",
               "properties": {
                 "friendlyName": "AVD Workspace",
-                "applicationGroupReferences": [
-                  "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('appGroupName'))]"
-                ]
+                "applicationGroupReferences": "[variables('publishedAppGroupIds')]"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('appGroupName'))]"
+                "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('desktopAppGroupName'))]",
+                "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('remoteAppGroupName'))]"
               ]
             }
           ],
@@ -570,9 +704,17 @@
               "type": "string",
               "value": "[parameters('hostPoolName')]"
             },
-            "appGroupId": {
+            "desktopAppGroupId": {
               "type": "string",
-              "value": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('appGroupName'))]"
+              "value": "[if(parameters('publishDesktop'), resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('desktopAppGroupName')), '')]"
+            },
+            "remoteAppGroupId": {
+              "type": "string",
+              "value": "[if(parameters('publishRemoteApps'), resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('remoteAppGroupName')), '')]"
+            },
+            "publishedAppGroupIds": {
+              "type": "array",
+              "value": "[variables('publishedAppGroupIds')]"
             },
             "workspaceId": {
               "type": "string",
@@ -1226,6 +1368,18 @@
       "type": "string",
       "value": "[reference('hostPool').outputs.workspaceId.value]"
     },
+    "desktopAppGroupId": {
+      "type": "string",
+      "value": "[reference('hostPool').outputs.desktopAppGroupId.value]"
+    },
+    "remoteAppGroupId": {
+      "type": "string",
+      "value": "[reference('hostPool').outputs.remoteAppGroupId.value]"
+    },
+    "publishedAppGroupIds": {
+      "type": "array",
+      "value": "[reference('hostPool').outputs.publishedAppGroupIds.value]"
+    },
     "vnetId": {
       "type": "string",
       "value": "[reference('network').outputs.vnetId.value]"
@@ -1241,6 +1395,10 @@
     "logAnalyticsWorkspace": {
       "type": "string",
       "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.workspaceName.value, 'N/A')]"
+    },
+    "effectiveAvdMode": {
+      "type": "string",
+      "value": "[variables('effectiveAvdMode')]"
     },
     "avdRolesAssigned": {
       "type": "bool",

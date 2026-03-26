@@ -44,9 +44,11 @@ The portal form is generated from the template parameters.
 - `environment`
 - `sessionHostCount`
 - `vmSize`
-- `hostPoolType`
+- `avdMode`
+- `hostPoolType` when using the legacy desktop-only fallback
 - `deployFSLogix`
 - `deployMonitoring`
+- `remoteApps`
 - `vnetAddressPrefix`
 - `sessionHostSubnetPrefix`
 - `privateEndpointSubnetPrefix`
@@ -56,7 +58,8 @@ The portal form is generated from the template parameters.
 
 - `deploymentPrefix`: maximum 6 characters
 - `sessionHostCount`: 1 to 10
-- `hostPoolType`: `Pooled` or `Personal`
+- `avdMode`: `PersonalDesktop`, `PooledRemoteApp`, or `PooledDesktopAndRemoteApp`
+- `hostPoolType`: `Pooled` or `Personal` when `avdMode` is empty
 - `storageAccountName`: 3 to 24 characters, globally unique, lowercase letters and numbers only
 - `adminPassword`: must satisfy Azure password complexity rules
 
@@ -77,7 +80,7 @@ Azure Resource Manager receives the top-level template and builds a dependency g
 The top-level deployment orchestrates these major components:
 
 1. Network
-2. Host pool and workspace
+2. Host pool, application groups, published RemoteApps, and workspace
 3. Session hosts
 4. FSLogix storage, if enabled
 5. Monitoring, if enabled
@@ -129,16 +132,19 @@ Deployment name: `deploy-hostpool`
 Azure creates:
 
 - Host pool: `hp-avd-<prefix>-<env>`
-- Desktop application group: `dag-avd-<prefix>-<env>`
+- Desktop application group: `dag-avd-<prefix>-<env>` when the selected mode publishes desktops
+- RemoteApp application group: `rag-avd-<prefix>-<env>` when the selected mode publishes RemoteApps
 - Workspace: `ws-avd-<prefix>-<env>`
 
 Host pool configuration includes:
 
-- `Pooled` or `Personal`, depending on the input
+- `Pooled` or `Personal`, derived from `avdMode` when it is provided and otherwise from the legacy `hostPoolType`
 - `BreadthFirst` load balancing by default
 - `startVMOnConnect: true`
-- Desktop app group preference
+- `Desktop` or `RailApplications` preferred app group type, based on what the selected mode publishes
 - A 48-hour registration token generated via `registrationInfo`
+
+If `avdMode` includes RemoteApps, the template also publishes one `Microsoft.DesktopVirtualization/applicationGroups/applications` resource for each object in `remoteApps`.
 
 The host pool also sets custom RDP properties for Entra-joined AVD access, including:
 

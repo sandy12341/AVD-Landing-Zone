@@ -128,12 +128,14 @@ This is the recommended method. It requires **no tooling** — just a browser.
    | Environment | `dev` | Options: `dev`, `test`, `prod` |
    | Session Host Count | `2` | Number of VMs (1–10) |
    | Vm Size | `Standard_D2ads_v5` | Any supported VM SKU |
-   | Host Pool Type | `Pooled` | `Pooled` or `Personal` |
+  | Avd Mode | `PooledDesktopAndRemoteApp` | Preferred delivery model: `PersonalDesktop`, `PooledRemoteApp`, or `PooledDesktopAndRemoteApp` |
+  | Host Pool Type | `Pooled` | Legacy desktop-only fallback when `avdMode` is left empty |
    | Admin Username | `avdadmin` | Local admin for VMs |
    | Admin Password | `(secure value)` | Must meet Azure complexity requirements |
   | Storage Account Name | `stavdmyappdev001` | Required when FSLogix is enabled. Must be globally unique, 3-24 chars, lowercase letters and numbers only. |
    | Deploy FSLogix | `true` | Creates Azure Files storage for profiles |
    | Deploy Monitoring | `true` | Creates Log Analytics workspace |
+  | Remote Apps | JSON array | Used only when `avdMode` publishes RemoteApps |
 
   The portal no longer supplies a default `storageAccountName`. The user must enter a unique value during deployment to avoid collisions with existing storage accounts.
 
@@ -151,13 +153,14 @@ az group create --name rg-avd-myapp-dev --location westus2
 az deployment group create \
   --resource-group rg-avd-myapp-dev \
   --template-uri "https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/azuredeploy.json" \
+  --parameters avdMode='PooledDesktopAndRemoteApp' \
   --parameters deploymentPrefix='myapp' \
                environment='dev' \
                sessionHostCount=2 \
                vmSize='Standard_D2ads_v5' \
-               hostPoolType='Pooled' \
                adminUsername='avdadmin' \
                adminPassword='YourSecurePassword123!' \
+               remoteApps='[{"name":"notepad","friendlyName":"Notepad","filePath":"C:\\Windows\\System32\\notepad.exe"}]' \
                storageAccountName='stavdmyappdev001'
 ```
 
@@ -176,6 +179,24 @@ az deployment group create \
   --parameters adminPassword='YourSecurePassword123!' storageAccountName='stavdmyappdev001'
 ```
 
+Reusable sample parameter files are also available for each delivery mode:
+
+- `infra/samples/main.personaldesktop.parameters.json`
+- `infra/samples/main.pooledremoteapp.parameters.json`
+- `infra/samples/main.pooleddesktopandremoteapp.parameters.json`
+
+Example:
+
+```bash
+az deployment group create \
+  --resource-group rg-avd-myapp-dev \
+  --template-file infra/main.bicep \
+  --parameters @infra/samples/main.pooledremoteapp.parameters.json \
+  --parameters adminPassword='YourSecurePassword123!' \
+               storageAccountName='stavdmyappdev001' \
+               avdUserObjectId='00000000-0000-0000-0000-000000000000'
+```
+
 ### 2.5 Deployment Module Execution Order
 
 ARM deploys the modules in the following dependency chain:
@@ -187,7 +208,7 @@ main.bicep (orchestrator)
   │      └── VNet, Subnets, NSG
   │
   ├──► hostpool.bicep           (no dependencies)
-  │      └── Host Pool, App Group, Workspace
+  │      └── Host Pool, Desktop/RemoteApp Groups, Published Apps, Workspace
   │
   ├──► sessionhosts.bicep       (depends on: network, hostpool)
   │      ├── NICs
@@ -224,6 +245,7 @@ AVD-Landing-Zone/
 └── infra/
     ├── main.bicep                     # Main orchestrator — entry point for all deployments
     ├── main.parameters.json           # Default parameter values for CLI/PowerShell deployments
+    ├── samples/                       # Mode-specific sample parameter files for repeatable testing
     ├── azuredeploy.json               # Pre-compiled ARM JSON template (used by "Deploy to Azure" button)
     ├── modules/
     │   ├── network.bicep              # Virtual Network, Subnets, NSG
@@ -253,7 +275,8 @@ AVD-Landing-Zone/
 | VNet | `vnet-avd-{prefix}-{env}` | `vnet-avd-myapp-dev` |
 | Host Pool | `hp-avd-{prefix}-{env}` | `hp-avd-myapp-dev` |
 | Workspace | `ws-avd-{prefix}-{env}` | `ws-avd-myapp-dev` |
-| App Group | `dag-avd-{prefix}-{env}` | `dag-avd-myapp-dev` |
+| Desktop App Group | `dag-avd-{prefix}-{env}` | `dag-avd-myapp-dev` |
+| RemoteApp Group | `rag-avd-{prefix}-{env}` | `rag-avd-myapp-dev` |
 | VMs | `vm-avd-{prefix}-{env}-{i}` | `vm-avd-myapp-dev-0` |
 | Storage | `stavd{prefix}{env}` (no hyphens) | `stavdmyappdev` |
 | Log Analytics | `log-avd-{prefix}-{env}` | `log-avd-myapp-dev` |
@@ -268,6 +291,17 @@ AVD-Landing-Zone/
 - `sessionHostCount`: `1`
 - `vmSize`: `Standard_D2ads_v5`
 - `adminPassword`: **Not included** — must be supplied at deploy time for security
+
+### 3.2.1 `infra/samples/*.parameters.json` — Mode-Specific Samples
+
+**Purpose:** Provides ready-to-run examples for each supported delivery mode without changing the baseline defaults file.
+
+**Included samples:**
+- `main.personaldesktop.parameters.json`
+- `main.pooledremoteapp.parameters.json`
+- `main.pooleddesktopandremoteapp.parameters.json`
+
+Each sample still expects you to supply environment-specific secure values such as `adminPassword`, `storageAccountName`, and usually `avdUserObjectId` at deployment time.
 
 ### 3.3 `infra/azuredeploy.json` — Compiled ARM Template
 
