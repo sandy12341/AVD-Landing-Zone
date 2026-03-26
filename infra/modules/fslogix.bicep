@@ -52,12 +52,12 @@ module storageAccountAuth './fslogixAuth.bicep' = {
     tags: tags
     sessionHostSubnetId: sessionHostSubnetId
   }
+  dependsOn: [fileShare]
 }
 
 resource fileServices 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
   parent: storageAccount
   name: 'default'
-  dependsOn: [storageAccountAuth]
 }
 
 resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
@@ -67,7 +67,6 @@ resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-0
     shareQuota: fileShareQuotaGiB
     enabledProtocols: 'SMB'
   }
-  dependsOn: [storageAccountAuth]
 }
 
 output storageAccountId string = storageAccount.id

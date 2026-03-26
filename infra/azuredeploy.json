@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "10762752318004179902"
+      "templateHash": "1979591661416567489"
     }
   },
   "parameters": {
@@ -905,7 +905,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "9975415244456826635"
+              "templateHash": "13625449147331760348"
             }
           },
           "parameters": {
@@ -981,8 +981,7 @@
               "apiVersion": "2023-05-01",
               "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
-                "[resourceId('Microsoft.Resources/deployments', 'configure-fslogix-auth')]"
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
               ]
             },
             {
@@ -994,8 +993,7 @@
                 "enabledProtocols": "SMB"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccountName'), 'default')]",
-                "[resourceId('Microsoft.Resources/deployments', 'configure-fslogix-auth')]"
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccountName'), 'default')]"
               ]
             },
             {
@@ -1090,7 +1088,10 @@
                     }
                   ]
                 }
-              }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', parameters('storageAccountName'), 'default', parameters('fileShareName'))]"
+              ]
             }
           ],
           "outputs": {
