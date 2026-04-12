@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.3.12046",
-      "templateHash": "11568022976785685202"
+      "templateHash": "12047730265763022445"
     }
   },
   "parameters": {
@@ -180,11 +180,11 @@
         "description": "Host pool name"
       }
     },
-    "avdUserObjectId": {
+    "avdUserObjectIds": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments."
+        "description": "Comma or newline separated Entra Object IDs to grant AVD access. Leave empty to skip role assignments."
       }
     },
     "remoteApps": {
@@ -203,6 +203,13 @@
     }
   },
   "variables": {
+    "copy": [
+      {
+        "name": "normalizedAvdUserObjectIds",
+        "count": "[length(split(replace(replace(parameters('avdUserObjectIds'), '\r\n', ','), '\n', ','), ','))]",
+        "input": "[trim(split(replace(replace(parameters('avdUserObjectIds'), '\r\n', ','), '\n', ','), ',')[copyIndex('normalizedAvdUserObjectIds')])]"
+      }
+    ],
     "namingPrefix": "[format('{0}-{1}', parameters('deploymentPrefix'), parameters('environment'))]",
     "effectiveAvdMode": "[if(empty(parameters('avdMode')), if(equals(parameters('hostPoolType'), 'Personal'), 'PersonalDesktop', 'PooledDesktop'), parameters('avdMode'))]",
     "effectiveHostPoolType": "[if(equals(variables('effectiveAvdMode'), 'PersonalDesktop'), 'Personal', 'Pooled')]",
@@ -221,13 +228,17 @@
   },
   "resources": [
     {
-      "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishDesktop'))]",
+      "copy": {
+        "name": "desktopAvdUserRole",
+        "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+      },
+      "condition": "[and(variables('publishDesktop'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', variables('desktopAppGroupName'))]",
-      "name": "[guid(resourceGroup().id, variables('desktopAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+      "name": "[guid(resourceGroup().id, variables('desktopAppGroupName'), variables('normalizedAvdUserObjectIds')[copyIndex()], '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
+        "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
       },
@@ -236,13 +247,17 @@
       ]
     },
     {
-      "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishRemoteApps'))]",
+      "copy": {
+        "name": "remoteAppAvdUserRole",
+        "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+      },
+      "condition": "[and(variables('publishRemoteApps'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', variables('remoteAppGroupName'))]",
-      "name": "[guid(resourceGroup().id, variables('remoteAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+      "name": "[guid(resourceGroup().id, variables('remoteAppGroupName'), variables('normalizedAvdUserObjectIds')[copyIndex()], '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
+        "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
       },
@@ -251,12 +266,16 @@
       ]
     },
     {
-      "condition": "[not(empty(parameters('avdUserObjectId')))]",
+      "copy": {
+        "name": "vmLoginRole",
+        "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+      },
+      "condition": "[and(equals(parameters('authenticationType'), 'EntraID'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, parameters('avdUserObjectId'), 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
+      "name": "[guid(resourceGroup().id, variables('normalizedAvdUserObjectIds')[copyIndex()], 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
+        "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
         "principalType": "User"
       }
@@ -1353,7 +1372,7 @@
     },
     "avdRolesAssigned": {
       "type": "bool",
-      "value": "[not(empty(parameters('avdUserObjectId')))]"
+      "value": "[greater(length(trim(replace(replace(replace(parameters('avdUserObjectIds'), '\r', ''), '\n', ''), ',', ''))), 0)]"
     }
   }
 }

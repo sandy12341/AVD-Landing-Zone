@@ -247,16 +247,6 @@
             }
           },
           {
-            "name": "avdUserObjectId",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Optional AVD user object ID",
-            "defaultValue": "",
-            "toolTip": "Leave blank to skip automatic end-user role assignments.",
-            "constraints": {
-              "required": false
-            }
-          },
-          {
             "name": "remoteAppsJson",
             "type": "Microsoft.Common.TextBox",
             "label": "RemoteApp definitions (JSON array)",
@@ -341,6 +331,34 @@
               "regex": "^$|^(?=.{1,1024}$)(?:OU=[^,=]+,)*(?:DC=[^,=]+,)*DC=[^,=]+$",
               "validationMessage": "Use distinguished name format such as OU=AVD,DC=contoso,DC=com (or leave blank)."
             }
+          },
+          {
+            "name": "entraUserObjectIds",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Cloud identity object IDs",
+            "defaultValue": "",
+            "multiLine": true,
+            "toolTip": "Optional. Enter one Entra Object ID per line (or comma-separated) to grant AVD access when EntraID authentication is selected.",
+            "visible": "[equals(steps('authentication').authenticationType, 'EntraID')]",
+            "constraints": {
+              "required": false,
+              "regex": "^\\s*$|^\\s*[0-9a-fA-F-]{36}(\\s*[,\\n]\\s*[0-9a-fA-F-]{36})*\\s*$",
+              "validationMessage": "Use one or more GUID object IDs separated by commas or new lines."
+            }
+          },
+          {
+            "name": "hybridUserObjectIds",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Hybrid user object IDs",
+            "defaultValue": "",
+            "multiLine": true,
+            "toolTip": "Optional. Enter object IDs for hybrid-synced users to grant AVD access when HybridJoin is selected.",
+            "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+            "constraints": {
+              "required": false,
+              "regex": "^\\s*$|^\\s*[0-9a-fA-F-]{36}(\\s*[,\\n]\\s*[0-9a-fA-F-]{36})*\\s*$",
+              "validationMessage": "Use one or more GUID object IDs separated by commas or new lines."
+            }
           }
         ]
       }
@@ -369,7 +387,7 @@
       "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
       "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
       "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",
-      "avdUserObjectId": "[steps('access').avdUserObjectId]",
+      "avdUserObjectIds": "[if(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').entraUserObjectIds, steps('authentication').hybridUserObjectIds)]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }

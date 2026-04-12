@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.3.12046",
-      "templateHash": "15190028534718562732"
+      "templateHash": "12047730265763022445"
     }
   },
   "parameters": {
@@ -76,6 +76,45 @@
         "description": "Host pool type"
       }
     },
+    "authenticationType": {
+      "type": "string",
+      "defaultValue": "EntraID",
+      "allowedValues": [
+        "EntraID",
+        "HybridJoin"
+      ],
+      "metadata": {
+        "description": "Authentication type for session host sign-in and join flow"
+      }
+    },
+    "domainFqdn": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Active Directory domain FQDN (required for HybridJoin)"
+      }
+    },
+    "domainJoinUsername": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Domain join service account in DOMAIN\\username or username@domain format (required for HybridJoin)"
+      }
+    },
+    "domainJoinPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Domain join service account password (required for HybridJoin)"
+      }
+    },
+    "domainJoinOuPath": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional OU path where computer accounts should be created for HybridJoin (for example OU=AVD,DC=contoso,DC=com)"
+      }
+    },
     "adminUsername": {
       "type": "string",
       "metadata": {
@@ -141,11 +180,11 @@
         "description": "Host pool name"
       }
     },
-    "avdUserObjectId": {
+    "avdUserObjectIds": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments."
+        "description": "Comma or newline separated Entra Object IDs to grant AVD access. Leave empty to skip role assignments."
       }
     },
     "remoteApps": {
@@ -164,6 +203,13 @@
     }
   },
   "variables": {
+    "copy": [
+      {
+        "name": "normalizedAvdUserObjectIds",
+        "count": "[length(split(replace(replace(parameters('avdUserObjectIds'), '\r\n', ','), '\n', ','), ','))]",
+        "input": "[trim(split(replace(replace(parameters('avdUserObjectIds'), '\r\n', ','), '\n', ','), ',')[copyIndex('normalizedAvdUserObjectIds')])]"
+      }
+    ],
     "namingPrefix": "[format('{0}-{1}', parameters('deploymentPrefix'), parameters('environment'))]",
     "effectiveAvdMode": "[if(empty(parameters('avdMode')), if(equals(parameters('hostPoolType'), 'Personal'), 'PersonalDesktop', 'PooledDesktop'), parameters('avdMode'))]",
     "effectiveHostPoolType": "[if(equals(variables('effectiveAvdMode'), 'PersonalDesktop'), 'Personal', 'Pooled')]",
@@ -182,36 +228,54 @@
   },
   "resources": [
     {
-      "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishDesktop'))]",
+      "copy": {
+        "name": "desktopAvdUserRole",
+        "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+      },
+      "condition": "[and(variables('publishDesktop'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', variables('desktopAppGroupName'))]",
-      "name": "[guid(resourceGroup().id, variables('desktopAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+      "name": "[guid(resourceGroup().id, variables('desktopAppGroupName'), variables('normalizedAvdUserObjectIds')[copyIndex()], '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
+        "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]"
+      ]
     },
     {
-      "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishRemoteApps'))]",
+      "copy": {
+        "name": "remoteAppAvdUserRole",
+        "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+      },
+      "condition": "[and(variables('publishRemoteApps'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', variables('remoteAppGroupName'))]",
-      "name": "[guid(resourceGroup().id, variables('remoteAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+      "name": "[guid(resourceGroup().id, variables('remoteAppGroupName'), variables('normalizedAvdUserObjectIds')[copyIndex()], '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
+        "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]"
+      ]
     },
     {
-      "condition": "[not(empty(parameters('avdUserObjectId')))]",
+      "copy": {
+        "name": "vmLoginRole",
+        "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+      },
+      "condition": "[and(equals(parameters('authenticationType'), 'EntraID'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, parameters('avdUserObjectId'), 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
+      "name": "[guid(resourceGroup().id, variables('normalizedAvdUserObjectIds')[copyIndex()], 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
       "properties": {
-        "principalId": "[parameters('avdUserObjectId')]",
+        "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
         "principalType": "User"
       }
@@ -250,6 +314,9 @@
           "publishRemoteApps": {
             "value": "[variables('publishRemoteApps')]"
           },
+          "authenticationType": {
+            "value": "[parameters('authenticationType')]"
+          },
           "remoteApps": {
             "value": "[parameters('remoteApps')]"
           },
@@ -264,7 +331,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.3.12046",
-              "templateHash": "11325979281366706443"
+              "templateHash": "10825543000310365427"
             }
           },
           "parameters": {
@@ -350,6 +417,17 @@
                 "description": "Publish a RemoteApp application group"
               }
             },
+            "authenticationType": {
+              "type": "string",
+              "defaultValue": "EntraID",
+              "allowedValues": [
+                "EntraID",
+                "HybridJoin"
+              ],
+              "metadata": {
+                "description": "Authentication type for session host sign-in and join flow"
+              }
+            },
             "remoteApps": {
               "type": "array",
               "defaultValue": [],
@@ -374,6 +452,8 @@
           },
           "variables": {
             "preferredAppGroupType": "[if(parameters('publishDesktop'), 'Desktop', 'RailApplications')]",
+            "entraRdpProperties": "targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;",
+            "hybridRdpProperties": "targetisaadjoined:i:0;enablerdsaadauth:i:0;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;",
             "publishedAppGroupIds": "[concat(if(parameters('publishDesktop'), createArray(resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('desktopAppGroupName'))), createArray()), if(parameters('publishRemoteApps'), createArray(resourceId('Microsoft.DesktopVirtualization/applicationGroups', parameters('remoteAppGroupName'))), createArray()))]"
           },
           "resources": [
@@ -391,7 +471,7 @@
                 "friendlyName": "[parameters('hostPoolFriendlyName')]",
                 "validationEnvironment": false,
                 "startVMOnConnect": true,
-                "customRdpProperty": "targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;",
+                "customRdpProperty": "[if(equals(parameters('authenticationType'), 'HybridJoin'), variables('hybridRdpProperties'), variables('entraRdpProperties'))]",
                 "registrationInfo": {
                   "expirationTime": "[dateTimeAdd(parameters('baseTime'), 'PT48H')]",
                   "registrationTokenOperation": "Update"
@@ -527,6 +607,21 @@
           "adminPassword": {
             "value": "[parameters('adminPassword')]"
           },
+          "authenticationType": {
+            "value": "[parameters('authenticationType')]"
+          },
+          "domainFqdn": {
+            "value": "[parameters('domainFqdn')]"
+          },
+          "domainJoinUsername": {
+            "value": "[parameters('domainJoinUsername')]"
+          },
+          "domainJoinPassword": {
+            "value": "[parameters('domainJoinPassword')]"
+          },
+          "domainJoinOuPath": {
+            "value": "[parameters('domainJoinOuPath')]"
+          },
           "deploymentInstanceSeed": {
             "value": "[parameters('deploymentInstanceSeed')]"
           },
@@ -544,7 +639,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.3.12046",
-              "templateHash": "3429560116624822357"
+              "templateHash": "16167346065916922748"
             }
           },
           "parameters": {
@@ -594,6 +689,45 @@
                 "description": "Local admin password"
               }
             },
+            "authenticationType": {
+              "type": "string",
+              "defaultValue": "EntraID",
+              "allowedValues": [
+                "EntraID",
+                "HybridJoin"
+              ],
+              "metadata": {
+                "description": "Authentication type for session host sign-in and join flow"
+              }
+            },
+            "domainFqdn": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Active Directory domain FQDN (required for HybridJoin)"
+              }
+            },
+            "domainJoinUsername": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Domain join service account in DOMAIN\\username or username@domain format (required for HybridJoin)"
+              }
+            },
+            "domainJoinPassword": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Domain join service account password (required for HybridJoin)"
+              }
+            },
+            "domainJoinOuPath": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional OU path where computer accounts should be created for HybridJoin (for example OU=AVD,DC=contoso,DC=com)"
+              }
+            },
             "imageReference": {
               "type": "object",
               "defaultValue": {
@@ -630,7 +764,9 @@
           "variables": {
             "computerNamePrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 10)]",
             "computerNameSeed": "[take(uniqueString(resourceGroup().id, parameters('deploymentInstanceSeed')), 4)]",
-            "installScriptUri": "https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1",
+            "domainJoinUserEffective": "[if(or(contains(parameters('domainJoinUsername'), '\\'), contains(parameters('domainJoinUsername'), '@')), parameters('domainJoinUsername'), format('{0}@{1}', parameters('domainJoinUsername'), parameters('domainFqdn')))]",
+            "domainJoinOuPathNormalized": "[if(empty(parameters('domainJoinOuPath')), '', replace(parameters('domainJoinOuPath'), ', ', ','))]",
+            "installScriptContent": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$HostPoolResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$ProgressPreference = 'SilentlyContinue'\r\n\r\n# Azure's internal DNS (168.63.129.16) is always reachable inside any Azure VNet.\r\n# If the VNet uses a custom DNS server that cannot forward public queries, inject\r\n# Azure DNS as a fallback on the NIC so that public Microsoft hostnames resolve.\r\nfunction Ensure-AzureDnsFallback {\r\n    $azureDns = '168.63.129.16'\r\n    $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -notmatch 'Loopback' } | Select-Object -First 1\r\n    if (-not $adapter) { Write-Output \"No active adapter found; skipping DNS fallback injection.\"; return }\r\n\r\n    $current = (Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4).ServerAddresses\r\n    if ($azureDns -notin $current) {\r\n        $updated = @($current) + $azureDns\r\n        Set-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -ServerAddresses $updated\r\n        Write-Output \"Injected Azure DNS ($azureDns) as fallback on adapter '$($adapter.Name)'. Current list: $($updated -join ', ')\"\r\n        # Flush the cache so the new server is tried immediately\r\n        Clear-DnsClientCache\r\n    } else {\r\n        Write-Output \"Azure DNS ($azureDns) already present; DNS fallback not needed.\"\r\n    }\r\n}\r\n\r\nfunction Download-WithFallback {\r\n    param(\r\n        [Parameter(Mandatory=$true)]\r\n        [string[]]$Uris,\r\n        [Parameter(Mandatory=$true)]\r\n        [string]$OutFile,\r\n        [Parameter(Mandatory=$true)]\r\n        [string]$ArtifactName\r\n    )\r\n\r\n    $errors = @()\r\n    $dnsFallbackApplied = $false\r\n\r\n    foreach ($uri in $Uris) {\r\n        # Retry each URI up to twice: once normally, once after Azure DNS injection if the\r\n        # first attempt is a name-resolution failure.\r\n        for ($attempt = 1; $attempt -le 2; $attempt++) {\r\n            try {\r\n                Write-Output \"Downloading $ArtifactName from $uri (attempt $attempt)\"\r\n                Invoke-WebRequest -Uri $uri -OutFile $OutFile -UseBasicParsing\r\n                if ((Test-Path $OutFile) -and (Get-Item $OutFile).Length -gt 0) {\r\n                    Write-Output \"Downloaded $ArtifactName ($((Get-Item $OutFile).Length) bytes)\"\r\n                    return\r\n                }\r\n                $errors += \"${uri}: downloaded empty file\"\r\n                break\r\n            } catch {\r\n                $msg = $_.Exception.Message\r\n                $isDnsFailure = ($msg -match 'remote name could not be resolved' -or $msg -match 'NameResolutionFailure' -or $msg -match 'DNS')\r\n                if ($isDnsFailure -and -not $dnsFallbackApplied -and $attempt -eq 1) {\r\n                    Write-Output \"DNS failure detected for $uri - injecting Azure DNS fallback and retrying...\"\r\n                    Ensure-AzureDnsFallback\r\n                    $dnsFallbackApplied = $true\r\n                    # continue loop to attempt == 2\r\n                } else {\r\n                    $errors += \"${uri} (attempt $attempt): $msg\"\r\n                    break\r\n                }\r\n            }\r\n        }\r\n    }\r\n\r\n    $errorsJoined = ($errors -join [Environment]::NewLine)\r\n    throw (\"Failed to download {0}. Attempts:{1}{2}\" -f $ArtifactName, [Environment]::NewLine, $errorsJoined)\r\n}\r\n\r\n$bootLoaderUris = @(\r\n    'https://go.microsoft.com/fwlink/?linkid=2311028',\r\n    'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'\r\n)\r\n\r\n$rdAgentUris = @(\r\n    'https://go.microsoft.com/fwlink/?linkid=2310011',\r\n    'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'\r\n)\r\n\r\n# Proactively inject Azure DNS fallback when the VM is being provisioned.\r\nWrite-Output \"Ensuring Azure DNS fallback is configured before AVD downloads...\"\r\nEnsure-AzureDnsFallback\r\n\r\n# Download AVD agent MSIs first (before token retrieval, so token is as fresh as possible)\r\nDownload-WithFallback -Uris $bootLoaderUris -OutFile \"$env:TEMP\\BootLoader.msi\" -ArtifactName 'AVD BootLoader'\r\nDownload-WithFallback -Uris $rdAgentUris -OutFile \"$env:TEMP\\RDAgent.msi\" -ArtifactName 'AVD RD Agent'\r\nWrite-Output \"Both MSIs downloaded.\"\r\n\r\n# Retrieve registration token from host pool using VM managed identity\r\nWrite-Output \"Retrieving registration token via managed identity...\"\r\n$registrationToken = $null\r\nfor ($retry = 1; $retry -le 18; $retry++) {\r\n    try {\r\n        $imdsUrl = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/'\r\n        $tokenResponse = Invoke-RestMethod -Uri $imdsUrl -Headers @{Metadata='true'} -Method GET\r\n        $accessToken = $tokenResponse.access_token\r\n        $apiUrl = \"https://management.azure.com${HostPoolResourceId}/retrieveRegistrationToken?api-version=2024-04-08-preview\"\r\n        $headers = @{ Authorization = \"Bearer $accessToken\"; 'Content-Type' = 'application/json' }\r\n        $regResponse = Invoke-RestMethod -Uri $apiUrl -Method POST -Headers $headers -Body '{}'\r\n        $registrationToken = $regResponse.token\r\n        if ($registrationToken) {\r\n            Write-Output \"Registration token retrieved (attempt $retry).\"\r\n            break\r\n        }\r\n    } catch {\r\n        Write-Output \"Attempt $retry failed: $($_.Exception.Message)\"\r\n        if ($retry -lt 18) { Start-Sleep -Seconds 10 }\r\n    }\r\n}\r\nif (-not $registrationToken) {\r\n    Write-Error \"Failed to retrieve registration token after 18 attempts.\"\r\n    exit 1\r\n}\r\n\r\n# Install AVD BootLoader (MSI already downloaded)\r\nWrite-Output \"Installing AVD BootLoader...\"\r\nStart-Process msiexec.exe -Wait -ArgumentList '/i', \"$env:TEMP\\BootLoader.msi\", '/quiet', '/norestart'\r\n\r\n# Install AVD RD Agent (MSI already downloaded)\r\nWrite-Output \"Installing AVD RD Agent...\"\r\nStart-Process msiexec.exe -Wait -ArgumentList '/i', \"$env:TEMP\\RDAgent.msi\", '/quiet', '/norestart'\r\n\r\n# Configure registration via registry\r\nWrite-Output \"Configuring AVD agent registration...\"\r\nStop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\nStop-Service RdAgent -Force -ErrorAction SilentlyContinue\r\nStart-Sleep -Seconds 5\r\n\r\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name RegistrationToken -Value $registrationToken\r\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name IsRegistered -Value 0\r\n\r\nSet-Service RdAgent -StartupType Automatic\r\nSet-Service RDAgentBootLoader -StartupType Automatic\r\nStart-Service RdAgent\r\nStart-Sleep -Seconds 5\r\nStart-Service RDAgentBootLoader\r\n\r\n# Wait for registration with retry (up to 3 attempts, 120s each, 30s pause between)\r\nfor ($attempt = 1; $attempt -le 3; $attempt++) {\r\n    Write-Output \"Registration attempt $attempt of 3...\"\r\n    for ($wait = 0; $wait -lt 120; $wait += 10) {\r\n        Start-Sleep -Seconds 10\r\n        $isReg = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n        $rdAgentStatus = (Get-Service RdAgent -ErrorAction SilentlyContinue).Status\r\n        $bootLoaderStatus = (Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue).Status\r\n        if ($isReg -eq 1) {\r\n            Start-Sleep -Seconds 20\r\n            $rdAgentStatus = (Get-Service RdAgent -ErrorAction SilentlyContinue).Status\r\n            $bootLoaderStatus = (Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue).Status\r\n            if ($rdAgentStatus -eq 'Running' -and $bootLoaderStatus -eq 'Running') {\r\n                Write-Output \"AVD agent registered successfully (attempt $attempt).\"\r\n                exit 0\r\n            }\r\n\r\n            Write-Output \"Registered, but agent services are not healthy: RdAgent=$rdAgentStatus RDAgentBootLoader=$bootLoaderStatus\"\r\n            break\r\n        }\r\n\r\n        if ($rdAgentStatus -ne 'Running' -or $bootLoaderStatus -ne 'Running') {\r\n            Write-Output \"Agent services unhealthy during registration wait: RdAgent=$rdAgentStatus RDAgentBootLoader=$bootLoaderStatus\"\r\n            break\r\n        }\r\n    }\r\n\r\n    if ($attempt -lt 3) {\r\n        Write-Output \"Not registered yet. Waiting 30s before retry...\"\r\n        Start-Sleep -Seconds 30\r\n        Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\n        Stop-Service RdAgent -Force -ErrorAction SilentlyContinue\r\n        Start-Sleep -Seconds 5\r\n        Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name IsRegistered -Value 0\r\n        Start-Service RdAgent\r\n        Start-Sleep -Seconds 5\r\n        Start-Service RDAgentBootLoader\r\n    }\r\n}\r\n\r\n$finalStatus = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n$finalRdAgentStatus = (Get-Service RdAgent -ErrorAction SilentlyContinue).Status\r\n$finalBootLoaderStatus = (Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue).Status\r\nWrite-Output \"Final registration status: IsRegistered=$finalStatus\"\r\nWrite-Output \"Final service status: RdAgent=$finalRdAgentStatus RDAgentBootLoader=$finalBootLoaderStatus\"\r\nif ($finalStatus -ne 1 -or $finalRdAgentStatus -ne 'Running' -or $finalBootLoaderStatus -ne 'Running') { exit 1 }\r\nexit 0\r\n",
             "desktopVirtContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '082f0a83-3be5-4ba1-904c-961cca79b387')]"
           },
           "resources": [
@@ -736,6 +872,7 @@
                 "name": "aadJoin",
                 "count": "[length(range(0, parameters('sessionHostCount')))]"
               },
+              "condition": "[equals(parameters('authenticationType'), 'EntraID')]",
               "type": "Microsoft.Compute/virtualMachines/extensions",
               "apiVersion": "2024-07-01",
               "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'AADLoginForWindows')]",
@@ -753,28 +890,89 @@
             },
             {
               "copy": {
-                "name": "avdAgent",
+                "name": "hybridDomainJoin",
                 "count": "[length(range(0, parameters('sessionHostCount')))]"
               },
+              "condition": "[equals(parameters('authenticationType'), 'HybridJoin')]",
               "type": "Microsoft.Compute/virtualMachines/extensions",
               "apiVersion": "2024-07-01",
-              "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'InstallAVDAgent')]",
+              "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'JsonADDomainExtension')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "properties": {
                 "publisher": "Microsoft.Compute",
-                "type": "CustomScriptExtension",
-                "typeHandlerVersion": "1.10",
+                "type": "JsonADDomainExtension",
+                "typeHandlerVersion": "1.3",
                 "autoUpgradeMinorVersion": true,
+                "settings": {
+                  "Name": "[parameters('domainFqdn')]",
+                  "User": "[variables('domainJoinUserEffective')]",
+                  "OUPath": "[variables('domainJoinOuPathNormalized')]",
+                  "Restart": true,
+                  "Options": 3
+                },
                 "protectedSettings": {
-                  "fileUris": [
-                    "[variables('installScriptUri')]"
-                  ],
-                  "commandToExecute": "[format('powershell.exe -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId \"{0}\"', resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
+                  "Password": "[parameters('domainJoinPassword')]"
                 }
               },
               "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "avdAgentEntra",
+                "count": "[length(range(0, parameters('sessionHostCount')))]"
+              },
+              "condition": "[equals(parameters('authenticationType'), 'EntraID')]",
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'InstallAVDAgentEntra')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "source": {
+                  "script": "[variables('installScriptContent')]"
+                },
+                "parameters": [
+                  {
+                    "name": "HostPoolResourceId",
+                    "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]"
+                  }
+                ],
+                "timeoutInSeconds": 5400
+              },
+              "dependsOn": [
                 "[resourceId('Microsoft.Compute/virtualMachines/extensions', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]]), 'AADLoginForWindows')]",
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]",
+                "[extensionResourceId(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]])), 'avd-contributor'))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "avdAgentHybrid",
+                "count": "[length(range(0, parameters('sessionHostCount')))]"
+              },
+              "condition": "[equals(parameters('authenticationType'), 'HybridJoin')]",
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]), 'InstallAVDAgentHybrid')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "source": {
+                  "script": "[variables('installScriptContent')]"
+                },
+                "parameters": [
+                  {
+                    "name": "HostPoolResourceId",
+                    "value": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]"
+                  }
+                ],
+                "timeoutInSeconds": 5400
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines/extensions', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]]), 'JsonADDomainExtension')]",
                 "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]))]",
                 "[extensionResourceId(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]]])), 'avd-contributor'))]"
               ]
@@ -1174,7 +1372,7 @@
     },
     "avdRolesAssigned": {
       "type": "bool",
-      "value": "[not(empty(parameters('avdUserObjectId')))]"
+      "value": "[greater(length(trim(replace(replace(replace(parameters('avdUserObjectIds'), '\r', ''), '\n', ''), ',', ''))), 0)]"
     }
   }
 }

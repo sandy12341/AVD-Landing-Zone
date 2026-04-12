@@ -229,13 +229,16 @@
             }
           },
           {
-            "name": "avdUserObjectId",
+            "name": "avdUserObjectIds",
             "type": "Microsoft.Common.TextBox",
-            "label": "Optional AVD user object ID",
+            "label": "Optional AVD user object IDs",
             "defaultValue": "",
-            "toolTip": "Leave blank to skip automatic end-user role assignments.",
+            "multiLine": true,
+            "toolTip": "Leave blank to skip automatic end-user role assignments. Enter one or more Entra Object IDs, separated by commas or new lines.",
             "constraints": {
-              "required": false
+              "required": false,
+              "regex": "^\\s*$|^\\s*[0-9a-fA-F-]{36}(\\s*[,\\n]\\s*[0-9a-fA-F-]{36})*\\s*$",
+              "validationMessage": "Use one or more GUID object IDs separated by commas or new lines."
             }
           },
           {
@@ -271,7 +274,7 @@
       "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
       "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
       "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",
-      "avdUserObjectId": "[steps('access').avdUserObjectId]",
+      "avdUserObjectIds": "[steps('access').avdUserObjectIds]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }

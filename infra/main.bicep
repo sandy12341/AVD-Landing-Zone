@@ -85,8 +85,8 @@ param privateEndpointSubnetName string
 @description('Host pool name')
 param hostPoolName string
 
-@description('Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments.')
-param avdUserObjectId string = ''
+@description('Comma or newline separated Entra Object IDs to grant AVD access. Leave empty to skip role assignments.')
+param avdUserObjectIds string = ''
 
 @description('RemoteApp definitions used when avdMode publishes RemoteApps. Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments.')
 param remoteApps array = []
@@ -103,6 +103,7 @@ var publishDesktop = effectiveAvdMode == 'PersonalDesktop' || effectiveAvdMode =
 var publishRemoteApps = effectiveAvdMode == 'PooledRemoteApp' || effectiveAvdMode == 'PooledDesktopAndRemoteApp'
 var desktopAppGroupName = 'dag-avd-${namingPrefix}'
 var remoteAppGroupName = 'rag-avd-${namingPrefix}'
+var normalizedAvdUserObjectIds = [for oid in split(replace(replace(avdUserObjectIds, '\r\n', ','), '\n', ','), ','): trim(oid)]
 var tags = {
   Environment: environment
   Project: 'AVD-Landing-Zone'
@@ -200,42 +201,42 @@ resource remoteAppGroup 'Microsoft.DesktopVirtualization/applicationGroups@2024-
 }
 
 // Desktop Virtualization User on the Desktop App Group
-resource desktopAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId) && publishDesktop) {
-  name: guid(resourceGroup().id, desktopAppGroupName, avdUserObjectId, '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
+resource desktopAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for oid in normalizedAvdUserObjectIds: if (publishDesktop && !empty(oid)) {
+  name: guid(resourceGroup().id, desktopAppGroupName, oid, '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
   scope: desktopAppGroup
   dependsOn: [
     hostPool
   ]
   properties: {
-    principalId: avdUserObjectId
+    principalId: oid
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
     principalType: 'User'
   }
-}
+}]
 
 // Desktop Virtualization User on the RemoteApp Group
-resource remoteAppAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId) && publishRemoteApps) {
-  name: guid(resourceGroup().id, remoteAppGroupName, avdUserObjectId, '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
+resource remoteAppAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for oid in normalizedAvdUserObjectIds: if (publishRemoteApps && !empty(oid)) {
+  name: guid(resourceGroup().id, remoteAppGroupName, oid, '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
   scope: remoteAppGroup
   dependsOn: [
     hostPool
   ]
   properties: {
-    principalId: avdUserObjectId
+    principalId: oid
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
     principalType: 'User'
   }
-}
+}]
 
 // Virtual Machine User Login on the Resource Group
-resource vmLoginRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId)) {
-  name: guid(resourceGroup().id, avdUserObjectId, 'fb879df8-f326-4884-b1cf-06f3ad86be52')
+resource vmLoginRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for oid in normalizedAvdUserObjectIds: if (authenticationType == 'EntraID' && !empty(oid)) {
+  name: guid(resourceGroup().id, oid, 'fb879df8-f326-4884-b1cf-06f3ad86be52')
   properties: {
-    principalId: avdUserObjectId
+    principalId: oid
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fb879df8-f326-4884-b1cf-06f3ad86be52')
     principalType: 'User'
   }
-}
+}]
 
 // ── Outputs ──
 
@@ -250,4 +251,4 @@ output sessionHostVmNames array = sessionHosts.outputs.vmNames
 output fslogixStorageAccount string = deployFSLogix ? fslogix!.outputs.storageAccountName : 'N/A'
 output logAnalyticsWorkspace string = deployMonitoring ? monitoring!.outputs.workspaceName : 'N/A'
 output effectiveAvdMode string = effectiveAvdMode
-output avdRolesAssigned bool = !empty(avdUserObjectId)
+output avdRolesAssigned bool = length(trim(replace(replace(replace(avdUserObjectIds, '\r', ''), '\n', ''), ',', ''))) > 0

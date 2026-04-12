@@ -13,6 +13,7 @@
     "domainJoinPassword": { "value": "" },
     "domainJoinOuPath": { "value": "" },
     "hostPoolName": { "value": "hp-avd-personal-dev" },
+    "avdUserObjectIds": { "value": "" },
     "adminUsername": { "value": "avdadmin" },
     "deployFSLogix": { "value": true },
     "deployMonitoring": { "value": true },
