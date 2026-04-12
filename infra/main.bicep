@@ -35,6 +35,20 @@ param avdMode string = ''
 @allowed(['Personal', 'Pooled'])
 param hostPoolType string = 'Pooled'
 
+@description('Authentication type for session host sign-in and join flow')
+@allowed(['EntraID', 'HybridJoin'])
+param authenticationType string = 'EntraID'
+
+@description('Active Directory domain FQDN (required for HybridJoin)')
+param domainFqdn string = ''
+
+@description('Domain join service account in DOMAIN\\username or username@domain format (required for HybridJoin)')
+param domainJoinUsername string = ''
+
+@description('Domain join service account password (required for HybridJoin)')
+@secure()
+param domainJoinPassword string = ''
+
 @description('Local admin username for session hosts')
 param adminUsername string
 
@@ -120,6 +134,7 @@ module hostPool 'modules/hostpool.bicep' = {
     remoteAppGroupName: remoteAppGroupName
     publishDesktop: publishDesktop
     publishRemoteApps: publishRemoteApps
+    authenticationType: authenticationType
     remoteApps: remoteApps
     tags: tags
   }
@@ -137,6 +152,10 @@ module sessionHosts 'modules/sessionhosts.bicep' = {
     hostPoolName: hostPool.outputs.hostPoolName
     adminUsername: adminUsername
     adminPassword: adminPassword
+    authenticationType: authenticationType
+    domainFqdn: domainFqdn
+    domainJoinUsername: domainJoinUsername
+    domainJoinPassword: domainJoinPassword
     deploymentInstanceSeed: deploymentInstanceSeed
     vmNamePrefix: 'vm-avd-${namingPrefix}'
     tags: tags

@@ -33,6 +33,10 @@ param publishDesktop bool = true
 @description('Publish a RemoteApp application group')
 param publishRemoteApps bool = false
 
+@description('Authentication type for session host sign-in and join flow')
+@allowed(['EntraID', 'HybridJoin'])
+param authenticationType string = 'EntraID'
+
 @description('RemoteApp definitions. Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments.')
 param remoteApps array = []
 
@@ -43,6 +47,8 @@ param tags object = {}
 param baseTime string = utcNow()
 
 var preferredAppGroupType = publishDesktop ? 'Desktop' : 'RailApplications'
+var entraRdpProperties = 'targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;'
+var hybridRdpProperties = 'targetisaadjoined:i:0;enablerdsaadauth:i:0;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;'
 var publishedAppGroupIds = concat(
   publishDesktop ? [desktopAppGroup.id] : [],
   publishRemoteApps ? [remoteAppGroup.id] : []
@@ -60,7 +66,7 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-08-preview'
     friendlyName: hostPoolFriendlyName
     validationEnvironment: false
     startVMOnConnect: true
-    customRdpProperty: 'targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectclipboard:i:1;audiomode:i:0;videoplaybackmode:i:1;use multimon:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;'
+    customRdpProperty: authenticationType == 'HybridJoin' ? hybridRdpProperties : entraRdpProperties
     registrationInfo: {
       expirationTime: dateTimeAdd(baseTime, 'PT48H')
       registrationTokenOperation: 'Update'

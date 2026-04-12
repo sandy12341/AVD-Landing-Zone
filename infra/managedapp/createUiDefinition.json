@@ -269,6 +269,63 @@
             }
           }
         ]
+      },
+      {
+        "name": "authentication",
+        "label": "Authentication",
+        "elements": [
+          {
+            "name": "authenticationType",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Authentication type",
+            "defaultValue": "EntraID",
+            "constraints": {
+              "required": true,
+              "allowedValues": [
+                {
+                  "label": "EntraID",
+                  "value": "EntraID"
+                },
+                {
+                  "label": "HybridJoin",
+                  "value": "HybridJoin"
+                }
+              ]
+            }
+          },
+          {
+            "name": "domainFqdn",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Domain FQDN",
+            "defaultValue": "",
+            "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+            "constraints": {
+              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]"
+            }
+          },
+          {
+            "name": "domainJoinUsername",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Domain join service account",
+            "defaultValue": "",
+            "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+            "constraints": {
+              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]"
+            }
+          },
+          {
+            "name": "domainJoinPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Domain join service account password",
+              "confirmPassword": "Confirm domain join service account password"
+            },
+            "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+            "constraints": {
+              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]"
+            }
+          }
+        ]
       }
     ],
     "outputs": {
@@ -287,6 +344,10 @@
       "privateEndpointSubnetName": "[steps('networking').privateEndpointSubnetName]",
       "adminUsername": "[steps('access').adminUsername]",
       "adminPassword": "[steps('access').adminPassword]",
+      "authenticationType": "[steps('authentication').authenticationType]",
+      "domainFqdn": "[steps('authentication').domainFqdn]",
+      "domainJoinUsername": "[steps('authentication').domainJoinUsername]",
+      "domainJoinPassword": "[steps('authentication').domainJoinPassword]",
       "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
       "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
       "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",

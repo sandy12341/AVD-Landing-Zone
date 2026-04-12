@@ -22,6 +22,20 @@ param adminUsername string
 @secure()
 param adminPassword string
 
+@description('Authentication type for session host sign-in and join flow')
+@allowed(['EntraID', 'HybridJoin'])
+param authenticationType string = 'EntraID'
+
+@description('Active Directory domain FQDN (required for HybridJoin)')
+param domainFqdn string = ''
+
+@description('Domain join service account in DOMAIN\\username or username@domain format (required for HybridJoin)')
+param domainJoinUsername string = ''
+
+@description('Domain join service account password (required for HybridJoin)')
+@secure()
+param domainJoinPassword string = ''
+
 @description('OS image reference')
 param imageReference object = {
   publisher: 'microsoftwindowsdesktop'
@@ -139,7 +153,7 @@ resource vmRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 
 // Entra ID (AAD) join extension
 resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
-  for i in range(0, sessionHostCount): {
+  for i in range(0, sessionHostCount): if (authenticationType == 'EntraID') {
     parent: sessionHosts[i]
     name: 'AADLoginForWindows'
     location: location
@@ -153,12 +167,37 @@ resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
   }
 ]
 
+// Domain join extension for HybridJoin mode
+resource hybridDomainJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
+  for i in range(0, sessionHostCount): if (authenticationType == 'HybridJoin') {
+    parent: sessionHosts[i]
+    name: 'JsonADDomainExtension'
+    location: location
+    tags: tags
+    properties: {
+      publisher: 'Microsoft.Compute'
+      type: 'JsonADDomainExtension'
+      typeHandlerVersion: '1.3'
+      autoUpgradeMinorVersion: true
+      settings: {
+        Name: domainFqdn
+        User: domainJoinUsername
+        Restart: true
+        Options: 3
+      }
+      protectedSettings: {
+        Password: domainJoinPassword
+      }
+    }
+  }
+]
+
 // AVD Agent — install via VM RunCommand with inline script content.
 // This avoids commandToExecute length limits in CustomScriptExtension.
-resource avdAgent 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
-  for i in range(0, sessionHostCount): {
+resource avdAgentEntra 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
+  for i in range(0, sessionHostCount): if (authenticationType == 'EntraID') {
     parent: sessionHosts[i]
-    name: 'InstallAVDAgent'
+    name: 'InstallAVDAgentEntra'
     location: location
     tags: tags
     properties: {
@@ -174,6 +213,28 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
       timeoutInSeconds: 5400
     }
     dependsOn: [aadJoin[i], vmRoleAssignment[i]]
+  }
+]
+
+resource avdAgentHybrid 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
+  for i in range(0, sessionHostCount): if (authenticationType == 'HybridJoin') {
+    parent: sessionHosts[i]
+    name: 'InstallAVDAgentHybrid'
+    location: location
+    tags: tags
+    properties: {
+      source: {
+        script: installScriptContent
+      }
+      parameters: [
+        {
+          name: 'HostPoolResourceId'
+          value: existingHostPool.id
+        }
+      ]
+      timeoutInSeconds: 5400
+    }
+    dependsOn: [hybridDomainJoin[i], vmRoleAssignment[i]]
   }
 ]
 
