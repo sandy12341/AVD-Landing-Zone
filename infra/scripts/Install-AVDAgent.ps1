@@ -81,6 +81,10 @@ $rdAgentUris = @(
     'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'
 )
 
+# Proactively inject Azure DNS fallback when the VM is being provisioned.
+Write-Output "Ensuring Azure DNS fallback is configured before AVD downloads..."
+Ensure-AzureDnsFallback
+
 # Download AVD agent MSIs first (before token retrieval, so token is as fresh as possible)
 Download-WithFallback -Uris $bootLoaderUris -OutFile "$env:TEMP\BootLoader.msi" -ArtifactName 'AVD BootLoader'
 Download-WithFallback -Uris $rdAgentUris -OutFile "$env:TEMP\RDAgent.msi" -ArtifactName 'AVD RD Agent'
