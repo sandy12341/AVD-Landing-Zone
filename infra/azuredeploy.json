@@ -1,12 +1,11 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.41.2.15936",
-      "templateHash": "17661289841837517639"
+      "version": "0.30.3.12046",
+      "templateHash": "16667126821698960380"
     }
   },
   "parameters": {
@@ -178,79 +177,32 @@
       "DeployedBy": "Bicep"
     }
   },
-  "resources": {
-    "existingVnet": {
-      "existing": true,
-      "type": "Microsoft.Network/virtualNetworks",
-      "apiVersion": "2023-09-01",
-      "resourceGroup": "[parameters('existingVnetResourceGroupName')]",
-      "name": "[parameters('existingVnetName')]"
-    },
-    "sessionHostSubnet": {
-      "existing": true,
-      "type": "Microsoft.Network/virtualNetworks/subnets",
-      "apiVersion": "2023-09-01",
-      "resourceGroup": "[parameters('existingVnetResourceGroupName')]",
-      "name": "[format('{0}/{1}', parameters('existingVnetName'), parameters('sessionHostSubnetName'))]"
-    },
-    "privateEndpointSubnet": {
-      "existing": true,
-      "type": "Microsoft.Network/virtualNetworks/subnets",
-      "apiVersion": "2023-09-01",
-      "resourceGroup": "[parameters('existingVnetResourceGroupName')]",
-      "name": "[format('{0}/{1}', parameters('existingVnetName'), parameters('privateEndpointSubnetName'))]"
-    },
-    "desktopAppGroup": {
-      "condition": "[variables('publishDesktop')]",
-      "existing": true,
-      "type": "Microsoft.DesktopVirtualization/applicationGroups",
-      "apiVersion": "2024-04-08-preview",
-      "name": "[variables('desktopAppGroupName')]",
-      "dependsOn": [
-        "hostPool"
-      ]
-    },
-    "remoteAppGroup": {
-      "condition": "[variables('publishRemoteApps')]",
-      "existing": true,
-      "type": "Microsoft.DesktopVirtualization/applicationGroups",
-      "apiVersion": "2024-04-08-preview",
-      "name": "[variables('remoteAppGroupName')]",
-      "dependsOn": [
-        "hostPool"
-      ]
-    },
-    "desktopAvdUserRole": {
+  "resources": [
+    {
       "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishDesktop'))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', variables('desktopAppGroupName'))]",
+      "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', variables('desktopAppGroupName'))]",
       "name": "[guid(resourceGroup().id, variables('desktopAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
         "principalId": "[parameters('avdUserObjectId')]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
-      },
-      "dependsOn": [
-        "hostPool"
-      ]
+      }
     },
-    "remoteAppAvdUserRole": {
+    {
       "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishRemoteApps'))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', variables('remoteAppGroupName'))]",
+      "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', variables('remoteAppGroupName'))]",
       "name": "[guid(resourceGroup().id, variables('remoteAppGroupName'), parameters('avdUserObjectId'), '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
       "properties": {
         "principalId": "[parameters('avdUserObjectId')]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
-      },
-      "dependsOn": [
-        "hostPool"
-      ]
+      }
     },
-    "vmLoginRole": {
+    {
       "condition": "[not(empty(parameters('avdUserObjectId')))]",
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
@@ -261,9 +213,9 @@
         "principalType": "User"
       }
     },
-    "hostPool": {
+    {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "deploy-hostpool",
       "properties": {
         "expressionEvaluationOptions": {
@@ -308,8 +260,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "6370157598245740493"
+              "version": "0.30.3.12046",
+              "templateHash": "11325979281366706443"
             }
           },
           "parameters": {
@@ -541,9 +493,9 @@
         }
       }
     },
-    "sessionHosts": {
+    {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "deploy-sessionhosts",
       "properties": {
         "expressionEvaluationOptions": {
@@ -564,7 +516,7 @@
             "value": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('existingVnetResourceGroupName')), 'Microsoft.Network/virtualNetworks/subnets', parameters('existingVnetName'), parameters('sessionHostSubnetName'))]"
           },
           "hostPoolName": {
-            "value": "[reference('hostPool').outputs.hostPoolName.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.hostPoolName.value]"
           },
           "adminUsername": {
             "value": "[parameters('adminUsername')]"
@@ -588,8 +540,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "1308884628312391098"
+              "version": "0.30.3.12046",
+              "templateHash": "4160301894852188022"
             }
           },
           "parameters": {
@@ -673,9 +625,10 @@
             }
           },
           "variables": {
+            "$fxv#0": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$HostPoolResourceId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$ProgressPreference = 'SilentlyContinue'\r\n\r\n# Download AVD agent MSIs first (before token retrieval, so token is as fresh as possible)\r\nWrite-Output \"Downloading AVD BootLoader...\"\r\nInvoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH' -OutFile \"$env:TEMP\\BootLoader.msi\"\r\nWrite-Output \"Downloading AVD RD Agent...\"\r\nInvoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv' -OutFile \"$env:TEMP\\RDAgent.msi\"\r\nWrite-Output \"Both MSIs downloaded.\"\r\n\r\n# Retrieve registration token from host pool using VM managed identity\r\nWrite-Output \"Retrieving registration token via managed identity...\"\r\n$registrationToken = $null\r\nfor ($retry = 1; $retry -le 18; $retry++) {\r\n    try {\r\n        $imdsUrl = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/'\r\n        $tokenResponse = Invoke-RestMethod -Uri $imdsUrl -Headers @{Metadata='true'} -Method GET\r\n        $accessToken = $tokenResponse.access_token\r\n        $apiUrl = \"https://management.azure.com${HostPoolResourceId}/retrieveRegistrationToken?api-version=2024-04-08-preview\"\r\n        $headers = @{ Authorization = \"Bearer $accessToken\"; 'Content-Type' = 'application/json' }\r\n        $regResponse = Invoke-RestMethod -Uri $apiUrl -Method POST -Headers $headers -Body '{}'\r\n        $registrationToken = $regResponse.token\r\n        if ($registrationToken) {\r\n            Write-Output \"Registration token retrieved (attempt $retry).\"\r\n            break\r\n        }\r\n    } catch {\r\n        Write-Output \"Attempt $retry failed: $($_.Exception.Message)\"\r\n        if ($retry -lt 18) { Start-Sleep -Seconds 10 }\r\n    }\r\n}\r\nif (-not $registrationToken) {\r\n    Write-Error \"Failed to retrieve registration token after 18 attempts.\"\r\n    exit 1\r\n}\r\n\r\n# Install AVD BootLoader (MSI already downloaded)\r\nWrite-Output \"Installing AVD BootLoader...\"\r\nStart-Process msiexec.exe -Wait -ArgumentList '/i', \"$env:TEMP\\BootLoader.msi\", '/quiet', '/norestart'\r\n\r\n# Install AVD RD Agent (MSI already downloaded)\r\nWrite-Output \"Installing AVD RD Agent...\"\r\nStart-Process msiexec.exe -Wait -ArgumentList '/i', \"$env:TEMP\\RDAgent.msi\", '/quiet', '/norestart'\r\n\r\n# Configure registration via registry\r\nWrite-Output \"Configuring AVD agent registration...\"\r\nStop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\nStop-Service RdAgent -Force -ErrorAction SilentlyContinue\r\nStart-Sleep -Seconds 5\r\n\r\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name RegistrationToken -Value $registrationToken\r\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name IsRegistered -Value 0\r\n\r\nSet-Service RdAgent -StartupType Automatic\r\nSet-Service RDAgentBootLoader -StartupType Automatic\r\nStart-Service RdAgent\r\nStart-Sleep -Seconds 5\r\nStart-Service RDAgentBootLoader\r\n\r\n# Wait for registration with retry (up to 3 attempts, 120s each, 30s pause between)\r\nfor ($attempt = 1; $attempt -le 3; $attempt++) {\r\n    Write-Output \"Registration attempt $attempt of 3...\"\r\n    for ($wait = 0; $wait -lt 120; $wait += 10) {\r\n        Start-Sleep -Seconds 10\r\n        $isReg = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n        $rdAgentStatus = (Get-Service RdAgent -ErrorAction SilentlyContinue).Status\r\n        $bootLoaderStatus = (Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue).Status\r\n        if ($isReg -eq 1) {\r\n            Start-Sleep -Seconds 20\r\n            $rdAgentStatus = (Get-Service RdAgent -ErrorAction SilentlyContinue).Status\r\n            $bootLoaderStatus = (Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue).Status\r\n            if ($rdAgentStatus -eq 'Running' -and $bootLoaderStatus -eq 'Running') {\r\n                Write-Output \"AVD agent registered successfully (attempt $attempt).\"\r\n                exit 0\r\n            }\r\n\r\n            Write-Output \"Registered, but agent services are not healthy: RdAgent=$rdAgentStatus RDAgentBootLoader=$bootLoaderStatus\"\r\n            break\r\n        }\r\n\r\n        if ($rdAgentStatus -ne 'Running' -or $bootLoaderStatus -ne 'Running') {\r\n            Write-Output \"Agent services unhealthy during registration wait: RdAgent=$rdAgentStatus RDAgentBootLoader=$bootLoaderStatus\"\r\n            break\r\n        }\r\n    }\r\n\r\n    if ($attempt -lt 3) {\r\n        Write-Output \"Not registered yet. Waiting 30s before retry...\"\r\n        Start-Sleep -Seconds 30\r\n        Stop-Service RDAgentBootLoader -Force -ErrorAction SilentlyContinue\r\n        Stop-Service RdAgent -Force -ErrorAction SilentlyContinue\r\n        Start-Sleep -Seconds 5\r\n        Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -Name IsRegistered -Value 0\r\n        Start-Service RdAgent\r\n        Start-Sleep -Seconds 5\r\n        Start-Service RDAgentBootLoader\r\n    }\r\n}\r\n\r\n$finalStatus = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue).IsRegistered\r\n$finalRdAgentStatus = (Get-Service RdAgent -ErrorAction SilentlyContinue).Status\r\n$finalBootLoaderStatus = (Get-Service RDAgentBootLoader -ErrorAction SilentlyContinue).Status\r\nWrite-Output \"Final registration status: IsRegistered=$finalStatus\"\r\nWrite-Output \"Final service status: RdAgent=$finalRdAgentStatus RDAgentBootLoader=$finalBootLoaderStatus\"\r\nif ($finalStatus -ne 1 -or $finalRdAgentStatus -ne 'Running' -or $finalBootLoaderStatus -ne 'Running') { exit 1 }\r\nexit 0\r\n",
             "computerNamePrefix": "[take(replace(replace(parameters('vmNamePrefix'), 'vm-', ''), '-', ''), 10)]",
             "computerNameSeed": "[take(uniqueString(resourceGroup().id, parameters('deploymentInstanceSeed')), 4)]",
-            "installScriptUri": "https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1",
+            "installScriptBase64": "[base64(variables('$fxv#0'))]",
             "desktopVirtContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '082f0a83-3be5-4ba1-904c-961cca79b387')]"
           },
           "resources": [
@@ -764,7 +717,7 @@
               },
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName'))]",
+              "scope": "[format('Microsoft.DesktopVirtualization/hostPools/{0}', parameters('hostPoolName'))]",
               "name": "[guid(resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')), resourceId('Microsoft.Compute/virtualMachines', format('{0}-{1}', parameters('vmNamePrefix'), range(0, parameters('sessionHostCount'))[range(0, parameters('sessionHostCount'))[copyIndex()]])), 'avd-contributor')]",
               "properties": {
                 "roleDefinitionId": "[variables('desktopVirtContributorRoleId')]",
@@ -812,10 +765,7 @@
                 "typeHandlerVersion": "1.10",
                 "autoUpgradeMinorVersion": true,
                 "protectedSettings": {
-                  "fileUris": [
-                    "[variables('installScriptUri')]"
-                  ],
-                  "commandToExecute": "[format('powershell.exe -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId \"{0}\"', resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
+                  "commandToExecute": "[format('powershell.exe -ExecutionPolicy Bypass -Command \"$p=''C:\\Windows\\Temp\\Install-AVDAgent.ps1''; [IO.File]::WriteAllText($p,[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''{0}''))); & $p -HostPoolResourceId ''{1}''\"', variables('installScriptBase64'), resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostPoolName')))]"
                 }
               },
               "dependsOn": [
@@ -844,13 +794,13 @@
         }
       },
       "dependsOn": [
-        "hostPool"
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]"
       ]
     },
-    "fslogix": {
+    {
       "condition": "[parameters('deployFSLogix')]",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "deploy-fslogix",
       "properties": {
         "expressionEvaluationOptions": {
@@ -877,8 +827,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "13625449147331760348"
+              "version": "0.30.3.12046",
+              "templateHash": "4726067882724199636"
             }
           },
           "parameters": {
@@ -971,7 +921,7 @@
             },
             {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2025-04-01",
+              "apiVersion": "2022-09-01",
               "name": "configure-fslogix-auth",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -998,8 +948,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.41.2.15936",
-                      "templateHash": "9479281706004445664"
+                      "version": "0.30.3.12046",
+                      "templateHash": "17020050856289694156"
                     }
                   },
                   "parameters": {
@@ -1084,10 +1034,10 @@
         }
       }
     },
-    "monitoring": {
+    {
       "condition": "[parameters('deployMonitoring')]",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "deploy-monitoring",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1111,8 +1061,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "2797888182563496268"
+              "version": "0.30.3.12046",
+              "templateHash": "2421454683100223721"
             }
           },
           "parameters": {
@@ -1171,27 +1121,27 @@
         }
       }
     }
-  },
+  ],
   "outputs": {
     "hostPoolName": {
       "type": "string",
-      "value": "[reference('hostPool').outputs.hostPoolName.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.hostPoolName.value]"
     },
     "workspaceId": {
       "type": "string",
-      "value": "[reference('hostPool').outputs.workspaceId.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.workspaceId.value]"
     },
     "desktopAppGroupId": {
       "type": "string",
-      "value": "[reference('hostPool').outputs.desktopAppGroupId.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.desktopAppGroupId.value]"
     },
     "remoteAppGroupId": {
       "type": "string",
-      "value": "[reference('hostPool').outputs.remoteAppGroupId.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.remoteAppGroupId.value]"
     },
     "publishedAppGroupIds": {
       "type": "array",
-      "value": "[reference('hostPool').outputs.publishedAppGroupIds.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-hostpool'), '2022-09-01').outputs.publishedAppGroupIds.value]"
     },
     "vnetId": {
       "type": "string",
@@ -1203,15 +1153,15 @@
     },
     "sessionHostVmNames": {
       "type": "array",
-      "value": "[reference('sessionHosts').outputs.vmNames.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-sessionhosts'), '2022-09-01').outputs.vmNames.value]"
     },
     "fslogixStorageAccount": {
       "type": "string",
-      "value": "[if(parameters('deployFSLogix'), reference('fslogix').outputs.storageAccountName.value, 'N/A')]"
+      "value": "[if(parameters('deployFSLogix'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-fslogix'), '2022-09-01').outputs.storageAccountName.value, 'N/A')]"
     },
     "logAnalyticsWorkspace": {
       "type": "string",
-      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.workspaceName.value, 'N/A')]"
+      "value": "[if(parameters('deployMonitoring'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-monitoring'), '2022-09-01').outputs.workspaceName.value, 'N/A')]"
     },
     "effectiveAvdMode": {
       "type": "string",

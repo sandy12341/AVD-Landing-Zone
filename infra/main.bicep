@@ -170,12 +170,10 @@ module monitoring 'modules/monitoring.bicep' = if (deployMonitoring) {
 
 resource desktopAppGroup 'Microsoft.DesktopVirtualization/applicationGroups@2024-04-08-preview' existing = if (publishDesktop) {
   name: desktopAppGroupName
-  dependsOn: [hostPool]
 }
 
 resource remoteAppGroup 'Microsoft.DesktopVirtualization/applicationGroups@2024-04-08-preview' existing = if (publishRemoteApps) {
   name: remoteAppGroupName
-  dependsOn: [hostPool]
 }
 
 // Desktop Virtualization User on the Desktop App Group
