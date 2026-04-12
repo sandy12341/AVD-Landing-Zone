@@ -6,11 +6,51 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+function Download-WithFallback {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$Uris,
+        [Parameter(Mandatory=$true)]
+        [string]$OutFile,
+        [Parameter(Mandatory=$true)]
+        [string]$ArtifactName
+    )
+
+    $errors = @()
+    foreach ($uri in $Uris) {
+        try {
+            Write-Output "Downloading $ArtifactName from $uri"
+            Invoke-WebRequest -Uri $uri -OutFile $OutFile -UseBasicParsing
+            if (Test-Path $OutFile) {
+                $size = (Get-Item $OutFile).Length
+                if ($size -gt 0) {
+                    Write-Output "Downloaded $ArtifactName ($size bytes)"
+                    return
+                }
+            }
+
+            $errors += "Empty file from $uri"
+        } catch {
+            $errors += "${uri}: $($_.Exception.Message)"
+        }
+    }
+
+    throw "Failed to download $ArtifactName. Attempts: $($errors -join ' | ')"
+}
+
+$bootLoaderUris = @(
+    'https://go.microsoft.com/fwlink/?linkid=2311028',
+    'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'
+)
+
+$rdAgentUris = @(
+    'https://go.microsoft.com/fwlink/?linkid=2310011',
+    'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'
+)
+
 # Download AVD agent MSIs first (before token retrieval, so token is as fresh as possible)
-Write-Output "Downloading AVD BootLoader..."
-Invoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH' -OutFile "$env:TEMP\BootLoader.msi"
-Write-Output "Downloading AVD RD Agent..."
-Invoke-WebRequest -Uri 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv' -OutFile "$env:TEMP\RDAgent.msi"
+Download-WithFallback -Uris $bootLoaderUris -OutFile "$env:TEMP\BootLoader.msi" -ArtifactName 'AVD BootLoader'
+Download-WithFallback -Uris $rdAgentUris -OutFile "$env:TEMP\RDAgent.msi" -ArtifactName 'AVD RD Agent'
 Write-Output "Both MSIs downloaded."
 
 # Retrieve registration token from host pool using VM managed identity
