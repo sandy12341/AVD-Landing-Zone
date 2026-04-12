@@ -41,6 +41,9 @@ param domainJoinUsername string = ''
 @secure()
 param domainJoinPassword string = ''
 
+@description('Optional OU path where computer accounts should be created for HybridJoin (for example OU=AVD,DC=contoso,DC=com)')
+param domainJoinOuPath string = ''
+
 @description('Local admin username for session hosts')
 param adminUsername string
 
@@ -130,6 +133,7 @@ module sessionHosts '../modules/sessionhosts.bicep' = {
     domainFqdn: domainFqdn
     domainJoinUsername: domainJoinUsername
     domainJoinPassword: domainJoinPassword
+    domainJoinOuPath: domainJoinOuPath
     deploymentInstanceSeed: deploymentInstanceSeed
     vmNamePrefix: 'vm-avd-${namingPrefix}'
     tags: tags

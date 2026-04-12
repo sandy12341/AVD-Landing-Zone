@@ -36,6 +36,9 @@ param domainJoinUsername string = ''
 @secure()
 param domainJoinPassword string = ''
 
+@description('Optional OU path where computer accounts should be created for HybridJoin (for example OU=AVD,DC=contoso,DC=com)')
+param domainJoinOuPath string = ''
+
 @description('OS image reference')
 param imageReference object = {
   publisher: 'microsoftwindowsdesktop'
@@ -182,6 +185,7 @@ resource hybridDomainJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-
       settings: {
         Name: domainFqdn
         User: domainJoinUsername
+        OUPath: domainJoinOuPath
         Restart: true
         Options: 3
       }

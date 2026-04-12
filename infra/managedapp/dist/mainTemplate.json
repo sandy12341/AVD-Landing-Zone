@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.3.12046",
-      "templateHash": "343819981590467289"
+      "templateHash": "6468411470519741452"
     }
   },
   "parameters": {
@@ -106,6 +106,13 @@
       "defaultValue": "",
       "metadata": {
         "description": "Domain join service account password (required for HybridJoin)"
+      }
+    },
+    "domainJoinOuPath": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional OU path where computer accounts should be created for HybridJoin (for example OU=AVD,DC=contoso,DC=com)"
       }
     },
     "adminUsername": {
@@ -593,6 +600,9 @@
           "domainJoinPassword": {
             "value": "[parameters('domainJoinPassword')]"
           },
+          "domainJoinOuPath": {
+            "value": "[parameters('domainJoinOuPath')]"
+          },
           "deploymentInstanceSeed": {
             "value": "[parameters('deploymentInstanceSeed')]"
           },
@@ -610,7 +620,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.30.3.12046",
-              "templateHash": "7833396731306799244"
+              "templateHash": "2235770378148094287"
             }
           },
           "parameters": {
@@ -690,6 +700,13 @@
               "defaultValue": "",
               "metadata": {
                 "description": "Domain join service account password (required for HybridJoin)"
+              }
+            },
+            "domainJoinOuPath": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional OU path where computer accounts should be created for HybridJoin (for example OU=AVD,DC=contoso,DC=com)"
               }
             },
             "imageReference": {
@@ -869,6 +886,7 @@
                 "settings": {
                   "Name": "[parameters('domainFqdn')]",
                   "User": "[parameters('domainJoinUsername')]",
+                  "OUPath": "[parameters('domainJoinOuPath')]",
                   "Restart": true,
                   "Options": 3
                 },

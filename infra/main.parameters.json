@@ -12,6 +12,7 @@
     "domainFqdn": { "value": "" },
     "domainJoinUsername": { "value": "" },
     "domainJoinPassword": { "value": "" },
+    "domainJoinOuPath": { "value": "" },
     "hostPoolName": { "value": "hp-avd-avd1-dev" },
     "adminUsername": { "value": "avdadmin" },
     "deployFSLogix": { "value": true },

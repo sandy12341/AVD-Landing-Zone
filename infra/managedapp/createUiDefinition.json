@@ -324,6 +324,17 @@
             "constraints": {
               "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]"
             }
+          },
+          {
+            "name": "domainJoinOuPath",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Optional OU path",
+            "defaultValue": "",
+            "toolTip": "Example: OU=AVD,DC=contoso,DC=com",
+            "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+            "constraints": {
+              "required": false
+            }
           }
         ]
       }
@@ -348,6 +359,7 @@
       "domainFqdn": "[steps('authentication').domainFqdn]",
       "domainJoinUsername": "[steps('authentication').domainJoinUsername]",
       "domainJoinPassword": "[steps('authentication').domainJoinPassword]",
+      "domainJoinOuPath": "[steps('authentication').domainJoinOuPath]",
       "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
       "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
       "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",
