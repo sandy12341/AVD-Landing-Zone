@@ -43,9 +43,9 @@ param deploymentInstanceSeed string
 var computerNamePrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 10)
 var computerNameSeed = take(uniqueString(resourceGroup().id, deploymentInstanceSeed), 4)
 
-// Download the install script at runtime to avoid overflowing the Windows command-line
-// limit in Custom Script Extension when the script content is large.
-var installScriptUri = 'https://raw.githubusercontent.com/sandy12341/AVD-Landing-Zone/master/infra/scripts/Install-AVDAgent.ps1'
+// Embed install script content at compile time to avoid runtime dependency on
+// external DNS resolution for raw.githubusercontent.com.
+var installScriptBase64 = base64(loadTextContent('../scripts/Install-AVDAgent.ps1'))
 
 // Reference existing host pool for role assignment and token retrieval
 resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-08-preview' existing = {
@@ -168,10 +168,7 @@ resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
       typeHandlerVersion: '1.10'
       autoUpgradeMinorVersion: true
       protectedSettings: {
-        fileUris: [
-          installScriptUri
-        ]
-        commandToExecute: format('powershell.exe -ExecutionPolicy Unrestricted -File Install-AVDAgent.ps1 -HostPoolResourceId "{0}"', existingHostPool.id)
+        commandToExecute: format('powershell.exe -ExecutionPolicy Bypass -Command "$p=\'C:\\Windows\\Temp\\Install-AVDAgent.ps1\'; [IO.File]::WriteAllText($p,[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(\'{0}\'))); & $p -HostPoolResourceId \'{1}\'"', installScriptBase64, existingHostPool.id)
       }
     }
     dependsOn: [aadJoin[i], vmRoleAssignment[i]]
