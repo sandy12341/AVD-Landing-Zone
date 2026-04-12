@@ -2,11 +2,95 @@
 
 Production-ready Azure Virtual Desktop deployment with Landing Zone architecture. Includes validated `PersonalDesktop`, `PooledRemoteApp`, and `PooledDesktopAndRemoteApp` delivery modes, FSLogix profile containers, Entra ID join, network segmentation, and monitoring.
 
+## Quick Deploy Options
+
+### Option 1: Managed Application (Recommended for Multi-Tenant) ⭐
+
+Deploy via Azure Managed Application portal with dynamic VNet/subnet dropdowns:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Solutions/ApplicationDefinition/avd-existing-network)
+
+**Benefits:**
+- Multi-tenant self-service deployment
+- Portal wizard with VNet and subnet dropdowns (no manual parameter entry)
+- Each user deploys to their own subscription/resources
+- Managed identity with automatic RBAC for resource access
+
+### Option 2: ARM Template Deployment
+
+Deploy directly from GitHub ARM template:
+
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2FcreateUiDefinition.json)
+
+**Note:** Requires manual parameter entry; VNet/subnet selection via text fields.
 
 ---
 
-## Architecture
+## Managed Application Architecture
+
+The repository includes pre-built **Azure Managed Application** infrastructure (`infra/managedapp/`) that provides a portal-driven deployment experience with dynamic VNet/subnet selection via dropdowns.
+
+### Managed App Files
+
+- **`mainTemplate.bicep`** - AVD infrastructure template (accepts existing VNet/subnets)
+- **`createUiDefinition.json`** - Portal wizard UI (5-step wizard with ArmApiControl dropdowns)
+- **`deployDefinition.bicep`** - Infrastructure-as-code for publishing the definition
+- **`dist/app.zip`** - Complete deployment package (hosted as GitHub release asset)
+
+### How It Works
+
+1. **User clicks Deploy button** → Portal opens managed application wizard
+2. **User authenticates** with their Azure credentials
+3. **Portal populates dropdowns**:
+   - Queries their subscriptions via ArmApiControl
+   - Lists VNets in selected subscription
+   - Lists subnets in selected VNet
+4. **User selects or enters**:
+   - Host pool name, instance count, VM size
+   - AVD delivery mode (PersonalDesktop / PooledRemoteApp)
+   - Admin credentials
+   - FSLogix and monitoring options
+   - (Optional) User object ID for RBAC access assignment
+5. **Resources deployed** to user's subscription in their selected resource group
+
+### Republishing the Managed Application
+
+To republish to a different Azure AD tenant or subscription:
+
+```bash
+# 1. Update Bicep templates as needed
+# 2. Recompile to JSON
+az bicep build --file infra/managedapp/mainTemplate.bicep --outfile infra/managedapp/dist/mainTemplate.json
+az bicep build --file infra/managedapp/deployDefinition.bicep --outfile infra/managedapp/dist/deployDefinition.json
+
+# 3. Create new app.zip package
+$files = @(
+  'infra/managedapp/dist/mainTemplate.json',
+  'infra/managedapp/dist/createUiDefinition.json'
+) | ForEach-Object { Get-Item $_ }
+Compress-Archive -Path $files -DestinationPath 'infra/managedapp/dist/app.zip' -Force
+
+# 4. Upload app.zip to your blob storage or GitHub release
+# 5. Deploy managedApplicationDefinition
+$packageUri = "https://your-storage-account.blob.core.windows.net/container/app.zip"
+az deployment group create \
+  -g <your-definition-rg> \
+  --template-file infra/managedapp/deployDefinition.bicep \
+  --parameters packageFileUri="$packageUri" principalId="<your-principal-id>"
+```
+
+### Multi-Tenant Deployment
+
+To enable users in other Azure AD tenants to deploy:
+
+1. **Publish in a shared subscription** managed by your organization
+2. **Generate Deploy button** with the published `applicationDefinitionId`
+3. **Share link** — users authenticate with their own credentials
+4. **Each user deploys** to their own subscription with their own resources
+
+No cross-tenant permissions needed — each user manages their own deployed resources independently.
+
+---
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
