@@ -1,0 +1,297 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": true,
+      "basics": {
+        "description": "Deploy Azure Virtual Desktop into an existing virtual network and choose existing subnets from the target subscription.",
+        "resourceGroup": {
+          "allowExisting": true
+        },
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.Compute",
+            "Microsoft.DesktopVirtualization",
+            "Microsoft.Network",
+            "Microsoft.Storage"
+          ]
+        },
+        "location": {
+          "resourceTypes": [
+            "Microsoft.Compute/virtualMachines",
+            "Microsoft.DesktopVirtualization/hostPools",
+            "Microsoft.Storage/storageAccounts"
+          ]
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "deploymentPrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Deployment Prefix",
+        "defaultValue": "avd1",
+        "toolTip": "Naming prefix used for resources other than the host pool.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z0-9]{1,6}$",
+          "validationMessage": "Use 1-6 lowercase letters or digits."
+        }
+      },
+      {
+        "name": "environment",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Environment",
+        "defaultValue": "dev",
+        "constraints": {
+          "required": true,
+          "allowedValues": [
+            {
+              "label": "Development",
+              "value": "dev"
+            },
+            {
+              "label": "Test",
+              "value": "test"
+            },
+            {
+              "label": "Production",
+              "value": "prod"
+            }
+          ]
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "instanceDetails",
+        "label": "Instance details",
+        "elements": [
+          {
+            "name": "hostPoolName",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Host pool name",
+            "defaultValue": "hp-avd-avd1-dev",
+            "constraints": {
+              "required": true,
+              "regex": "^[A-Za-z0-9-]{3,64}$",
+              "validationMessage": "Use 3-64 letters, numbers, or hyphens."
+            }
+          },
+          {
+            "name": "sessionHostCount",
+            "type": "Microsoft.Common.Slider",
+            "label": "Session Host Count",
+            "min": 1,
+            "max": 10,
+            "defaultValue": 1,
+            "showStepMarkers": true
+          },
+          {
+            "name": "vmSize",
+            "type": "Microsoft.Common.TextBox",
+            "label": "VM Size",
+            "defaultValue": "Standard_D2ads_v5",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "avdMode",
+            "type": "Microsoft.Common.DropDown",
+            "label": "AVD Mode",
+            "defaultValue": "PooledDesktopAndRemoteApp",
+            "constraints": {
+              "required": true,
+              "allowedValues": [
+                {
+                  "label": "Legacy pooled desktop",
+                  "value": ""
+                },
+                {
+                  "label": "Personal Desktop",
+                  "value": "PersonalDesktop"
+                },
+                {
+                  "label": "Pooled RemoteApp",
+                  "value": "PooledRemoteApp"
+                },
+                {
+                  "label": "Pooled Desktop + RemoteApp",
+                  "value": "PooledDesktopAndRemoteApp"
+                }
+              ]
+            }
+          },
+          {
+            "name": "hostPoolType",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Host Pool Type",
+            "defaultValue": "Pooled",
+            "constraints": {
+              "required": true,
+              "allowedValues": [
+                {
+                  "label": "Pooled",
+                  "value": "Pooled"
+                },
+                {
+                  "label": "Personal",
+                  "value": "Personal"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "networking",
+        "label": "Networking",
+        "elements": [
+          {
+            "name": "vnetApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(subscription().id, '/providers/Microsoft.Network/virtualNetworks?api-version=2023-09-01')]"
+            }
+          },
+          {
+            "name": "selectedVnet",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Existing virtual network",
+            "toolTip": "Select the existing VNet where AVD session hosts will be deployed.",
+            "filter": true,
+            "constraints": {
+              "allowedValues": "[map(steps('networking').vnetApi.value, (item) => parse(concat('{\"label\":\"', item.name, ' (', last(take(split(item.id, '/'), 5)), ')\",\"value\":\"', item.id, '\"}')))]",
+              "required": true
+            }
+          },
+          {
+            "name": "sessionHostSubnetName",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Session host subnet",
+            "toolTip": "Choose the existing subnet for AVD session host NICs.",
+            "constraints": {
+              "allowedValues": "[if(empty(steps('networking').selectedVnet), parse('[]'), map(first(filter(steps('networking').vnetApi.value, (item) => equals(item.id, steps('networking').selectedVnet))).properties.subnets, (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":\"', subnet.name, '\"}'))))]",
+              "required": true
+            }
+          },
+          {
+            "name": "privateEndpointSubnetName",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Private endpoint subnet",
+            "toolTip": "Choose the existing subnet reserved for private endpoints.",
+            "constraints": {
+              "allowedValues": "[if(empty(steps('networking').selectedVnet), parse('[]'), map(first(filter(steps('networking').vnetApi.value, (item) => equals(item.id, steps('networking').selectedVnet))).properties.subnets, (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":\"', subnet.name, '\"}'))))]",
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "storageMonitoring",
+        "label": "Storage and monitoring",
+        "elements": [
+          {
+            "name": "deployFSLogix",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy FSLogix storage",
+            "defaultValue": true
+          },
+          {
+            "name": "storageAccountName",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Storage account name",
+            "visible": "[steps('storageMonitoring').deployFSLogix]",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-z0-9]{3,24}$",
+              "validationMessage": "Use 3-24 lowercase letters or digits."
+            }
+          },
+          {
+            "name": "deployMonitoring",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy Log Analytics monitoring",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "name": "access",
+        "label": "Access and applications",
+        "elements": [
+          {
+            "name": "adminUsername",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Local admin username",
+            "defaultValue": "avdadmin",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "adminPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Local admin password",
+              "confirmPassword": "Confirm local admin password"
+            },
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.{12,})(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).*$",
+              "validationMessage": "Use at least 12 characters including upper, lower, number, and symbol."
+            }
+          },
+          {
+            "name": "avdUserObjectId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Optional AVD user object ID",
+            "defaultValue": "",
+            "toolTip": "Leave blank to skip automatic end-user role assignments.",
+            "constraints": {
+              "required": false
+            }
+          },
+          {
+            "name": "remoteAppsJson",
+            "type": "Microsoft.Common.TextBox",
+            "label": "RemoteApp definitions (JSON array)",
+            "defaultValue": "[]",
+            "multiLine": true,
+            "visible": "[or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp'))]",
+            "toolTip": "Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments.",
+            "constraints": {
+              "required": true
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "applicationResourceName": "[steps('instanceDetails').hostPoolName]",
+      "location": "[location()]",
+      "deploymentPrefix": "[basics('deploymentPrefix')]",
+      "environment": "[basics('environment')]",
+      "sessionHostCount": "[steps('instanceDetails').sessionHostCount]",
+      "vmSize": "[steps('instanceDetails').vmSize]",
+      "avdMode": "[steps('instanceDetails').avdMode]",
+      "hostPoolType": "[steps('instanceDetails').hostPoolType]",
+      "hostPoolName": "[steps('instanceDetails').hostPoolName]",
+      "existingVnetName": "[last(split(steps('networking').selectedVnet, '/'))]",
+      "existingVnetResourceGroupName": "[last(take(split(steps('networking').selectedVnet, '/'), 5))]",
+      "sessionHostSubnetName": "[steps('networking').sessionHostSubnetName]",
+      "privateEndpointSubnetName": "[steps('networking').privateEndpointSubnetName]",
+      "adminUsername": "[steps('access').adminUsername]",
+      "adminPassword": "[steps('access').adminPassword]",
+      "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
+      "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
+      "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",
+      "avdUserObjectId": "[steps('access').avdUserObjectId]",
+      "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
+    }
+  }
+}

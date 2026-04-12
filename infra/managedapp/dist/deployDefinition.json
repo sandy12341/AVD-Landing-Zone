@@ -1,0 +1,103 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.30.3.12046",
+      "templateHash": "6782119141656355331"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the managed application definition"
+      }
+    },
+    "managedApplicationDefinitionName": {
+      "type": "string",
+      "defaultValue": "avd-existing-network",
+      "metadata": {
+        "description": "Name of the managed application definition"
+      }
+    },
+    "definitionDisplayName": {
+      "type": "string",
+      "defaultValue": "Azure Virtual Desktop + ALZ",
+      "metadata": {
+        "description": "Display name shown in the Azure service catalog"
+      }
+    },
+    "definitionDescription": {
+      "type": "string",
+      "defaultValue": "Azure Virtual Desktop deployment that uses an existing VNet and existing subnets selected through a managed application portal wizard.",
+      "metadata": {
+        "description": "Description shown in the Azure service catalog"
+      }
+    },
+    "packageFileUri": {
+      "type": "string",
+      "metadata": {
+        "description": "URI of the managed application package zip file"
+      }
+    },
+    "principalId": {
+      "type": "string",
+      "metadata": {
+        "description": "Principal ID that receives access to the managed resource group"
+      }
+    },
+    "roleDefinitionId": {
+      "type": "string",
+      "defaultValue": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+      "metadata": {
+        "description": "Role definition ID granted to the managing principal"
+      }
+    },
+    "lockLevel": {
+      "type": "string",
+      "defaultValue": "ReadOnly",
+      "allowedValues": [
+        "ReadOnly"
+      ],
+      "metadata": {
+        "description": "Managed resource group lock level"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Solutions/applicationDefinitions",
+      "apiVersion": "2021-07-01",
+      "name": "[parameters('managedApplicationDefinitionName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "lockLevel": "[parameters('lockLevel')]",
+        "description": "[parameters('definitionDescription')]",
+        "displayName": "[parameters('definitionDisplayName')]",
+        "packageFileUri": "[parameters('packageFileUri')]",
+        "authorizations": [
+          {
+            "principalId": "[parameters('principalId')]",
+            "roleDefinitionId": "[parameters('roleDefinitionId')]"
+          }
+        ],
+        "deploymentPolicy": {
+          "deploymentMode": "Incremental"
+        },
+        "managementPolicy": {
+          "mode": "Managed"
+        },
+        "isEnabled": true
+      }
+    }
+  ],
+  "outputs": {
+    "managedApplicationDefinitionId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Solutions/applicationDefinitions', parameters('managedApplicationDefinitionName'))]"
+    }
+  }
+}
