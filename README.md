@@ -2,17 +2,31 @@
 
 Production-ready Azure Virtual Desktop deployment with Landing Zone architecture. Includes validated `PersonalDesktop`, `PooledRemoteApp`, and `PooledDesktopAndRemoteApp` delivery modes, FSLogix profile containers, Entra ID join, network segmentation, and monitoring.
 
-## Quick Deploy Options
+## Deploy to Azure
 
-### Option 1: Managed Application (Recommended for Multi-Tenant) ⭐
+### One-Click Deployment with VNet/Subnet Dropdowns ⭐
 
-Deploy via pre-published Azure Managed Application with dynamic VNet/subnet dropdowns. The managed app definition is published in a shared Azure subscription. Users can deploy from their own subscriptions with automatic network resource discovery.
+Click the button below for a guided deployment with dynamic VNet and subnet selection:
 
-**Deployment Steps:**
-1. Click the Deploy button below
-2. Select your Azure subscription and resource group
-3. Portal wizard guides you through configuration with VNet/subnet dropdowns
-4. Review and deploy
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fmanagedapp%2Fdist%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fmanagedapp%2FcreateUiDefinition.json)
+
+**What You Get:**
+- Multi-step portal wizard (5 steps)
+- **VNet selection dropdown** — lists all VNets in subscription
+- **Subnet selection dropdown** — filtered by selected VNet  
+- Configure host pool, session hosts, FSLogix, monitoring
+- Auto-deploy to your subscription, your resources
+
+**Deployment Flow:**
+1. Click Deploy to Azure button
+2. Portal opens with 5-step wizard
+3. Select subscription and resource group
+4. Basics: Host pool name, instance count, VM size
+5. Networking: Select VNet and subnets from dropdowns
+6. AVD Config: Delivery mode (Desktop/RemoteApp/Both)  
+7. Storage & Monitoring: FSLogix and Log Analytics options
+8. Access: (Optional) User object ID for RBAC assignment
+9. Review and create
 
 **Managed App Details:**
 - **Subscription:** `830ef649-535d-4642-9436-356f9619c2e4`
@@ -20,9 +34,13 @@ Deploy via pre-published Azure Managed Application with dynamic VNet/subnet drop
 - **Definition Name:** `avd-existing-network`
 - **Location:** westus3
 
-**Deploy the Managed Application:**
+---
 
-You can deploy using Azure CLI:
+## Alternative Deployment Methods
+
+### CLI Deployment with VNet/Subnet Dropdowns
+
+You can also deploy using Azure CLI with the same VNet/subnet dropdown experience:
 ```bash
 # Define parameters
 DEFINITION_ID="/subscriptions/830ef649-535d-4642-9436-356f9619c2e4/resourceGroups/rg-avd-managedapp-def/providers/Microsoft.Solutions/applicationDefinitions/avd-existing-network"
