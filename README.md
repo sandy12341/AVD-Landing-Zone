@@ -9,9 +9,9 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 Click the button below for a guided deployment with dynamic VNet and subnet selection:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2F7d5533b%2Finfra%2Fmanagedapp%2Fdist%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2F7d5533b%2Finfra%2Fmanagedapp%2FcreateUiDefinition.json)
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2F604e2d4%2Finfra%2Fmanagedapp%2Fdist%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2F604e2d4%2Finfra%2Fmanagedapp%2FcreateUiDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fb1edb69%2Finfra%2Fmanagedapp%2Fdist%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fb1edb69%2Finfra%2Fmanagedapp%2FcreateUiDefinition.json)
 
-**Pinned to commit `604e2d4`.**
+**Pinned to commit `b1edb69`.**
 **What You Get:**
 - Multi-step portal wizard (5 steps)
 - **VNet selection dropdown** — lists all VNets in subscription
