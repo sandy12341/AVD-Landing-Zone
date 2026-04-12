@@ -6,6 +6,26 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+# Azure's internal DNS (168.63.129.16) is always reachable inside any Azure VNet.
+# If the VNet uses a custom DNS server that cannot forward public queries, inject
+# Azure DNS as a fallback on the NIC so that public Microsoft hostnames resolve.
+function Ensure-AzureDnsFallback {
+    $azureDns = '168.63.129.16'
+    $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -notmatch 'Loopback' } | Select-Object -First 1
+    if (-not $adapter) { Write-Output "No active adapter found; skipping DNS fallback injection."; return }
+
+    $current = (Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4).ServerAddresses
+    if ($azureDns -notin $current) {
+        $updated = @($current) + $azureDns
+        Set-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -ServerAddresses $updated
+        Write-Output "Injected Azure DNS ($azureDns) as fallback on adapter '$($adapter.Name)'. Current list: $($updated -join ', ')"
+        # Flush the cache so the new server is tried immediately
+        Clear-DnsClientCache
+    } else {
+        Write-Output "Azure DNS ($azureDns) already present; DNS fallback not needed."
+    }
+}
+
 function Download-WithFallback {
     param(
         [Parameter(Mandatory=$true)]
@@ -17,25 +37,38 @@ function Download-WithFallback {
     )
 
     $errors = @()
+    $dnsFallbackApplied = $false
+
     foreach ($uri in $Uris) {
-        try {
-            Write-Output "Downloading $ArtifactName from $uri"
-            Invoke-WebRequest -Uri $uri -OutFile $OutFile -UseBasicParsing
-            if (Test-Path $OutFile) {
-                $size = (Get-Item $OutFile).Length
-                if ($size -gt 0) {
-                    Write-Output "Downloaded $ArtifactName ($size bytes)"
+        # Retry each URI up to twice: once normally, once after Azure DNS injection if the
+        # first attempt is a name-resolution failure.
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+            try {
+                Write-Output "Downloading $ArtifactName from $uri (attempt $attempt)"
+                Invoke-WebRequest -Uri $uri -OutFile $OutFile -UseBasicParsing
+                if ((Test-Path $OutFile) -and (Get-Item $OutFile).Length -gt 0) {
+                    Write-Output "Downloaded $ArtifactName ($((Get-Item $OutFile).Length) bytes)"
                     return
                 }
+                $errors += "${uri}: downloaded empty file"
+                break
+            } catch {
+                $msg = $_.Exception.Message
+                $isDnsFailure = ($msg -match 'remote name could not be resolved' -or $msg -match 'NameResolutionFailure' -or $msg -match 'DNS')
+                if ($isDnsFailure -and -not $dnsFallbackApplied -and $attempt -eq 1) {
+                    Write-Output "DNS failure detected for $uri — injecting Azure DNS fallback and retrying..."
+                    Ensure-AzureDnsFallback
+                    $dnsFallbackApplied = $true
+                    # continue loop to attempt == 2
+                } else {
+                    $errors += "${uri} (attempt $attempt): $msg"
+                    break
+                }
             }
-
-            $errors += "Empty file from $uri"
-        } catch {
-            $errors += "${uri}: $($_.Exception.Message)"
         }
     }
 
-    throw "Failed to download $ArtifactName. Attempts: $($errors -join ' | ')"
+    throw "Failed to download $ArtifactName. Attempts:`n$($errors -join "`n")"
 }
 
 $bootLoaderUris = @(
