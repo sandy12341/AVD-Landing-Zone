@@ -45,7 +45,7 @@ var computerNameSeed = take(uniqueString(resourceGroup().id, deploymentInstanceS
 
 // Embed install script content at compile time to avoid runtime dependency on
 // external DNS resolution for raw.githubusercontent.com.
-var installScriptBase64 = base64(loadTextContent('../scripts/Install-AVDAgent.ps1'))
+var installScriptContent = loadTextContent('../scripts/Install-AVDAgent.ps1')
 
 // Reference existing host pool for role assignment and token retrieval
 resource existingHostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-08-preview' existing = {
@@ -153,23 +153,25 @@ resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
   }
 ]
 
-// AVD Agent — install via Custom Script Extension (stable MSI download URLs)
-// Installs BootLoader + RDAgent MSIs, then writes the registration token to the registry
-// and restarts both services so the agent registers with the host pool.
-resource avdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [
+// AVD Agent — install via VM RunCommand with inline script content.
+// This avoids commandToExecute length limits in CustomScriptExtension.
+resource avdAgent 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' = [
   for i in range(0, sessionHostCount): {
     parent: sessionHosts[i]
     name: 'InstallAVDAgent'
     location: location
     tags: tags
     properties: {
-      publisher: 'Microsoft.Compute'
-      type: 'CustomScriptExtension'
-      typeHandlerVersion: '1.10'
-      autoUpgradeMinorVersion: true
-      protectedSettings: {
-        commandToExecute: format('powershell.exe -ExecutionPolicy Bypass -Command "$p=\'C:\\Windows\\Temp\\Install-AVDAgent.ps1\'; [IO.File]::WriteAllText($p,[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(\'{0}\'))); & $p -HostPoolResourceId \'{1}\'"', installScriptBase64, existingHostPool.id)
+      source: {
+        script: installScriptContent
       }
+      parameters: [
+        {
+          name: 'HostPoolResourceId'
+          value: existingHostPool.id
+        }
+      ]
+      timeoutInSeconds: 5400
     }
     dependsOn: [aadJoin[i], vmRoleAssignment[i]]
   }
