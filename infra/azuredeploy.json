@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "9669861418726239760"
+      "templateHash": "17661289841837517639"
     }
   },
   "parameters": {
@@ -111,25 +111,35 @@
         "description": "Deploy monitoring (Log Analytics)"
       }
     },
-    "vnetAddressPrefix": {
+    "existingVnetName": {
       "type": "string",
-      "defaultValue": "10.20.0.0/16",
       "metadata": {
-        "description": "VNet address prefix"
+        "description": "Name of the existing virtual network to use"
       }
     },
-    "sessionHostSubnetPrefix": {
+    "existingVnetResourceGroupName": {
       "type": "string",
-      "defaultValue": "10.20.1.0/24",
+      "defaultValue": "[resourceGroup().name]",
       "metadata": {
-        "description": "Session hosts subnet prefix"
+        "description": "Resource group name that contains the existing virtual network"
       }
     },
-    "privateEndpointSubnetPrefix": {
+    "sessionHostSubnetName": {
       "type": "string",
-      "defaultValue": "10.20.2.0/24",
       "metadata": {
-        "description": "Private endpoints subnet prefix"
+        "description": "Name of the existing subnet for session hosts"
+      }
+    },
+    "privateEndpointSubnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the existing subnet reserved for private endpoints"
+      }
+    },
+    "hostPoolName": {
+      "type": "string",
+      "metadata": {
+        "description": "Host pool name"
       }
     },
     "avdUserObjectId": {
@@ -169,6 +179,27 @@
     }
   },
   "resources": {
+    "existingVnet": {
+      "existing": true,
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "resourceGroup": "[parameters('existingVnetResourceGroupName')]",
+      "name": "[parameters('existingVnetName')]"
+    },
+    "sessionHostSubnet": {
+      "existing": true,
+      "type": "Microsoft.Network/virtualNetworks/subnets",
+      "apiVersion": "2023-09-01",
+      "resourceGroup": "[parameters('existingVnetResourceGroupName')]",
+      "name": "[format('{0}/{1}', parameters('existingVnetName'), parameters('sessionHostSubnetName'))]"
+    },
+    "privateEndpointSubnet": {
+      "existing": true,
+      "type": "Microsoft.Network/virtualNetworks/subnets",
+      "apiVersion": "2023-09-01",
+      "resourceGroup": "[parameters('existingVnetResourceGroupName')]",
+      "name": "[format('{0}/{1}', parameters('existingVnetName'), parameters('privateEndpointSubnetName'))]"
+    },
     "desktopAppGroup": {
       "condition": "[variables('publishDesktop')]",
       "existing": true,
@@ -230,220 +261,6 @@
         "principalType": "User"
       }
     },
-    "network": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "deploy-network",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "vnetName": {
-            "value": "[format('vnet-avd-{0}', variables('namingPrefix'))]"
-          },
-          "vnetAddressPrefix": {
-            "value": "[parameters('vnetAddressPrefix')]"
-          },
-          "sessionHostSubnetPrefix": {
-            "value": "[parameters('sessionHostSubnetPrefix')]"
-          },
-          "privateEndpointSubnetPrefix": {
-            "value": "[parameters('privateEndpointSubnetPrefix')]"
-          },
-          "tags": {
-            "value": "[variables('tags')]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.41.2.15936",
-              "templateHash": "11900941526185748342"
-            }
-          },
-          "parameters": {
-            "location": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure region for the VNet"
-              }
-            },
-            "vnetName": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the VNet"
-              }
-            },
-            "vnetAddressPrefix": {
-              "type": "string",
-              "defaultValue": "10.20.0.0/16",
-              "metadata": {
-                "description": "VNet address prefix"
-              }
-            },
-            "sessionHostSubnetPrefix": {
-              "type": "string",
-              "defaultValue": "10.20.1.0/24",
-              "metadata": {
-                "description": "Session hosts subnet prefix"
-              }
-            },
-            "privateEndpointSubnetPrefix": {
-              "type": "string",
-              "defaultValue": "10.20.2.0/24",
-              "metadata": {
-                "description": "Private endpoints subnet prefix"
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Tags for all resources"
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Network/publicIPAddresses",
-              "apiVersion": "2024-01-01",
-              "name": "[format('{0}-natgw-pip', parameters('vnetName'))]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "sku": {
-                "name": "Standard"
-              },
-              "properties": {
-                "publicIPAllocationMethod": "Static"
-              }
-            },
-            {
-              "type": "Microsoft.Network/natGateways",
-              "apiVersion": "2024-01-01",
-              "name": "[format('{0}-natgw', parameters('vnetName'))]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "sku": {
-                "name": "Standard"
-              },
-              "properties": {
-                "publicIpAddresses": [
-                  {
-                    "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-natgw-pip', parameters('vnetName')))]"
-                  }
-                ],
-                "idleTimeoutInMinutes": 4
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-natgw-pip', parameters('vnetName')))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/virtualNetworks",
-              "apiVersion": "2024-01-01",
-              "name": "[parameters('vnetName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "addressSpace": {
-                  "addressPrefixes": [
-                    "[parameters('vnetAddressPrefix')]"
-                  ]
-                },
-                "subnets": [
-                  {
-                    "name": "snet-avd-sessionhosts",
-                    "properties": {
-                      "addressPrefix": "[parameters('sessionHostSubnetPrefix')]",
-                      "networkSecurityGroup": {
-                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-sessionhosts')]"
-                      },
-                      "natGateway": {
-                        "id": "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]"
-                      },
-                      "serviceEndpoints": [
-                        {
-                          "service": "Microsoft.Storage"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "name": "snet-avd-privateendpoints",
-                    "properties": {
-                      "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]"
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/natGateways', format('{0}-natgw', parameters('vnetName')))]",
-                "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg-avd-sessionhosts')]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/networkSecurityGroups",
-              "apiVersion": "2024-01-01",
-              "name": "nsg-avd-sessionhosts",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "securityRules": [
-                  {
-                    "name": "AllowRDP",
-                    "properties": {
-                      "priority": 1000,
-                      "direction": "Inbound",
-                      "access": "Allow",
-                      "protocol": "Tcp",
-                      "sourceAddressPrefix": "VirtualNetwork",
-                      "sourcePortRange": "*",
-                      "destinationAddressPrefix": "*",
-                      "destinationPortRange": "3389"
-                    }
-                  },
-                  {
-                    "name": "DenyAllInbound",
-                    "properties": {
-                      "priority": 4096,
-                      "direction": "Inbound",
-                      "access": "Deny",
-                      "protocol": "*",
-                      "sourceAddressPrefix": "*",
-                      "sourcePortRange": "*",
-                      "destinationAddressPrefix": "*",
-                      "destinationPortRange": "*"
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          "outputs": {
-            "vnetId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
-            },
-            "sessionHostSubnetId": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '2024-01-01').subnets[0].id]"
-            },
-            "privateEndpointSubnetId": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '2024-01-01').subnets[1].id]"
-            }
-          }
-        }
-      }
-    },
     "hostPool": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -458,7 +275,7 @@
             "value": "[parameters('location')]"
           },
           "hostPoolName": {
-            "value": "[format('hp-avd-{0}', variables('namingPrefix'))]"
+            "value": "[parameters('hostPoolName')]"
           },
           "hostPoolType": {
             "value": "[variables('effectiveHostPoolType')]"
@@ -744,7 +561,7 @@
             "value": "[parameters('vmSize')]"
           },
           "subnetId": {
-            "value": "[reference('network').outputs.sessionHostSubnetId.value]"
+            "value": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('existingVnetResourceGroupName')), 'Microsoft.Network/virtualNetworks/subnets', parameters('existingVnetName'), parameters('sessionHostSubnetName'))]"
           },
           "hostPoolName": {
             "value": "[reference('hostPool').outputs.hostPoolName.value]"
@@ -1027,8 +844,7 @@
         }
       },
       "dependsOn": [
-        "hostPool",
-        "network"
+        "hostPool"
       ]
     },
     "fslogix": {
@@ -1049,7 +865,7 @@
             "value": "[parameters('storageAccountName')]"
           },
           "sessionHostSubnetId": {
-            "value": "[reference('network').outputs.sessionHostSubnetId.value]"
+            "value": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('existingVnetResourceGroupName')), 'Microsoft.Network/virtualNetworks/subnets', parameters('existingVnetName'), parameters('sessionHostSubnetName'))]"
           },
           "tags": {
             "value": "[variables('tags')]"
@@ -1266,10 +1082,7 @@
             }
           }
         }
-      },
-      "dependsOn": [
-        "network"
-      ]
+      }
     },
     "monitoring": {
       "condition": "[parameters('deployMonitoring')]",
@@ -1382,7 +1195,11 @@
     },
     "vnetId": {
       "type": "string",
-      "value": "[reference('network').outputs.vnetId.value]"
+      "value": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('existingVnetResourceGroupName')), 'Microsoft.Network/virtualNetworks', parameters('existingVnetName'))]"
+    },
+    "privateEndpointSubnetId": {
+      "type": "string",
+      "value": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('existingVnetResourceGroupName')), 'Microsoft.Network/virtualNetworks/subnets', parameters('existingVnetName'), parameters('privateEndpointSubnetName'))]"
     },
     "sessionHostVmNames": {
       "type": "array",

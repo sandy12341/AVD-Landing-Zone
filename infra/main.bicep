@@ -53,14 +53,20 @@ param storageAccountName string
 @description('Deploy monitoring (Log Analytics)')
 param deployMonitoring bool = true
 
-@description('VNet address prefix')
-param vnetAddressPrefix string = '10.20.0.0/16'
+@description('Name of the existing virtual network to use')
+param existingVnetName string
 
-@description('Session hosts subnet prefix')
-param sessionHostSubnetPrefix string = '10.20.1.0/24'
+@description('Resource group name that contains the existing virtual network')
+param existingVnetResourceGroupName string = resourceGroup().name
 
-@description('Private endpoints subnet prefix')
-param privateEndpointSubnetPrefix string = '10.20.2.0/24'
+@description('Name of the existing subnet for session hosts')
+param sessionHostSubnetName string
+
+@description('Name of the existing subnet reserved for private endpoints')
+param privateEndpointSubnetName string
+
+@description('Host pool name')
+param hostPoolName string
 
 @description('Entra Object ID of the user to grant AVD access. Leave empty to skip role assignments.')
 param avdUserObjectId string = ''
@@ -86,18 +92,19 @@ var tags = {
   DeployedBy: 'Bicep'
 }
 
-// ── Networking ──
+resource existingVnet 'Microsoft.Network/virtualNetworks@2023-09-01' existing = {
+  name: existingVnetName
+  scope: resourceGroup(existingVnetResourceGroupName)
+}
 
-module network 'modules/network.bicep' = {
-  name: 'deploy-network'
-  params: {
-    location: location
-    vnetName: 'vnet-avd-${namingPrefix}'
-    vnetAddressPrefix: vnetAddressPrefix
-    sessionHostSubnetPrefix: sessionHostSubnetPrefix
-    privateEndpointSubnetPrefix: privateEndpointSubnetPrefix
-    tags: tags
-  }
+resource sessionHostSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' existing = {
+  parent: existingVnet
+  name: sessionHostSubnetName
+}
+
+resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' existing = {
+  parent: existingVnet
+  name: privateEndpointSubnetName
 }
 
 // ── Host Pool + Workspace ──
@@ -106,7 +113,7 @@ module hostPool 'modules/hostpool.bicep' = {
   name: 'deploy-hostpool'
   params: {
     location: location
-    hostPoolName: 'hp-avd-${namingPrefix}'
+    hostPoolName: hostPoolName
     hostPoolType: effectiveHostPoolType
     workspaceName: 'ws-avd-${namingPrefix}'
     desktopAppGroupName: desktopAppGroupName
@@ -126,7 +133,7 @@ module sessionHosts 'modules/sessionhosts.bicep' = {
     location: location
     sessionHostCount: sessionHostCount
     vmSize: vmSize
-    subnetId: network.outputs.sessionHostSubnetId
+    subnetId: sessionHostSubnet.id
     hostPoolName: hostPool.outputs.hostPoolName
     adminUsername: adminUsername
     adminPassword: adminPassword
@@ -143,7 +150,7 @@ module fslogix 'modules/fslogix.bicep' = if (deployFSLogix) {
   params: {
     location: location
     storageAccountName: storageAccountName
-    sessionHostSubnetId: network.outputs.sessionHostSubnetId
+    sessionHostSubnetId: sessionHostSubnet.id
     tags: tags
   }
 }
@@ -210,7 +217,8 @@ output workspaceId string = hostPool.outputs.workspaceId
 output desktopAppGroupId string = hostPool.outputs.desktopAppGroupId
 output remoteAppGroupId string = hostPool.outputs.remoteAppGroupId
 output publishedAppGroupIds array = hostPool.outputs.publishedAppGroupIds
-output vnetId string = network.outputs.vnetId
+output vnetId string = existingVnet.id
+output privateEndpointSubnetId string = privateEndpointSubnet.id
 output sessionHostVmNames array = sessionHosts.outputs.vmNames
 output fslogixStorageAccount string = deployFSLogix ? fslogix!.outputs.storageAccountName : 'N/A'
 output logAnalyticsWorkspace string = deployMonitoring ? monitoring!.outputs.workspaceName : 'N/A'

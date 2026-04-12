@@ -2,7 +2,7 @@
 
 Production-ready Azure Virtual Desktop deployment with Landing Zone architecture. Includes validated `PersonalDesktop`, `PooledRemoteApp`, and `PooledDesktopAndRemoteApp` delivery modes, FSLogix profile containers, Entra ID join, network segmentation, and monitoring.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2FcreateUiDefinition.json)
 
 ---
 
@@ -13,23 +13,21 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 │  Resource Group: rg-avd-<prefix>-<env>                      │
 │                                                             │
 │  ┌─────────────────┐  ┌─────────────────────────────────┐  │
-│  │  VNet            │  │  Host Pool + Workspace          │  │
-│  │  10.20.0.0/16    │  │  ├─ Desktop and/or RemoteApp    │  │
-│  │  ├─ snet-hosts   │  │  └─ Start VM on Connect         │  │
-│  │  │  10.20.1.0/24 │  └─────────────────────────────────┘  │
-│  │  └─ snet-pe      │                                       │
-│  │     10.20.2.0/24 │  ┌─────────────────────────────────┐  │
-│  └─────────────────┘  │  Session Host VMs                │  │
+│  │  Existing VNet   │  │  Host Pool + Workspace          │  │
+│  │  User-selected   │  │  ├─ Desktop and/or RemoteApp    │  │
+│  │  host subnet     │  │  └─ Start VM on Connect         │  │
+│  │  PE subnet       │  └─────────────────────────────────┘  │
+│  └─────────────────┘  ┌─────────────────────────────────┐  │
+│                        │  Session Host VMs                │  │
 │                        │  ├─ Windows 11 Multi-Session     │  │
 │  ┌─────────────────┐  │  ├─ Entra ID Joined              │  │
 │  │  FSLogix Storage │  │  └─ AVD Agent (Custom Script)   │  │
 │  │  (Azure Files)   │  └─────────────────────────────────┘  │
 │  └─────────────────┘                                        │
 │                        ┌─────────────────────────────────┐  │
-│  ┌─────────────────┐  │  Monitoring                      │  │
-│  │  NSG             │  │  Log Analytics Workspace         │  │
-│  │  RDP from VNet   │  └─────────────────────────────────┘  │
-│  └─────────────────┘                                        │
+│                        │  Monitoring                      │  │
+│                        │  Log Analytics Workspace         │  │
+│                        └─────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -39,11 +37,11 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 - **Host Pool**: Pooled (BreadthFirst) or Personal, with Start VM on Connect
 - **Session Hosts**: Windows 11 24H2 Multi-Session, Entra ID joined, System Assigned Managed Identity
 - **FSLogix**: Azure Files share for user profile containers (Entra ID Kerberos auth, VNet-restricted)
-- **Networking**: Dedicated VNet with NSG, separate subnets for hosts and private endpoints
+- **Networking**: Uses an existing VNet and existing subnets selected at deployment time through the portal wizard
 - **Monitoring**: Log Analytics workspace for diagnostics
 - **Application Publishing**: Desktop app group, RemoteApp app group, or both from the same template
 - **Access Assignment**: When `avdUserObjectId` is provided, the template assigns `Desktop Virtualization User` on the published app groups and `Virtual Machine User Login` on the resource group
-- **Security**: NSG restricts RDP to VNet only, TLS 1.2 enforced on storage, no shared key access, and a CSE-driven AVD agent install using a GitHub-hosted script to avoid Windows command-line length limits
+- **Security**: TLS 1.2 enforced on storage, no shared key access, and a CSE-driven AVD agent install using a GitHub-hosted script to avoid Windows command-line length limits
 
 ## Prerequisites
 
@@ -59,6 +57,8 @@ Click the **Deploy to Azure** button above for a guided deployment experience.
 
 Important:
 
+- the portal wizard now lists existing VNets and subnets from the selected subscription
+- select the target VNet first, then choose the session host and private endpoint subnets from dropdowns
 - `storageAccountName` is a required free-form field in the portal
 - you must enter a globally unique name during deployment
 - the template no longer provides a default storage account name

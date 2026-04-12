@@ -8,12 +8,14 @@
     "vmSize": { "value": "Standard_D2ads_v5" },
     "avdMode": { "value": "" },
     "hostPoolType": { "value": "Pooled" },
+    "hostPoolName": { "value": "hp-avd-avd1-dev" },
     "adminUsername": { "value": "avdadmin" },
     "deployFSLogix": { "value": true },
     "deployMonitoring": { "value": true },
     "remoteApps": { "value": [] },
-    "vnetAddressPrefix": { "value": "10.20.0.0/16" },
-    "sessionHostSubnetPrefix": { "value": "10.20.1.0/24" },
-    "privateEndpointSubnetPrefix": { "value": "10.20.2.0/24" }
+    "existingVnetName": { "value": "existing-vnet-name" },
+    "existingVnetResourceGroupName": { "value": "existing-vnet-resource-group" },
+    "sessionHostSubnetName": { "value": "existing-sessionhost-subnet" },
+    "privateEndpointSubnetName": { "value": "existing-privateendpoint-subnet" }
   }
 }
