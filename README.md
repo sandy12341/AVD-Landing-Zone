@@ -6,23 +6,72 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 
 ### Option 1: Managed Application (Recommended for Multi-Tenant) ⭐
 
-Deploy via Azure Managed Application portal with dynamic VNet/subnet dropdowns:
+Deploy via pre-published Azure Managed Application with dynamic VNet/subnet dropdowns. The managed app definition is published in a shared Azure subscription. Users can deploy from their own subscriptions with automatic network resource discovery.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Solutions/ApplicationDefinition/avd-existing-network)
+**Deployment Steps:**
+1. Click the Deploy button below
+2. Select your Azure subscription and resource group
+3. Portal wizard guides you through configuration with VNet/subnet dropdowns
+4. Review and deploy
+
+**Managed App Details:**
+- **Subscription:** `830ef649-535d-4642-9436-356f9619c2e4`
+- **Resource Group:** `rg-avd-managedapp-def`
+- **Definition Name:** `avd-existing-network`
+- **Location:** westus3
+
+**Deploy the Managed Application:**
+
+You can deploy using Azure CLI:
+```bash
+# Define parameters
+DEFINITION_ID="/subscriptions/830ef649-535d-4642-9436-356f9619c2e4/resourceGroups/rg-avd-managedapp-def/providers/Microsoft.Solutions/applicationDefinitions/avd-existing-network"
+SUBSCRIPTION_ID="your-subscription-id"
+RESOURCE_GROUP="your-resource-group"
+
+# Create resource group
+az group create -n $RESOURCE_GROUP -l westus3
+
+# Deploy the managed application
+az deployment group create \
+  -g $RESOURCE_GROUP \
+  --subscription $SUBSCRIPTION_ID \
+  -n "avd-app-deploy" \
+  --template-spec "$DEFINITION_ID" \
+  --parameters \
+    hostPoolName="avd-hostpool" \
+    instanceCount=2 \
+    vmSize="Standard_D2s_v3" \
+    deliveryMode="PooledDesktopAndRemoteApp" \
+    existingVnetName="your-vnet" \
+    existingVnetResourceGroupName="your-vnet-rg"
+```
+
+Or deploy via PowerShell:
+```powershell
+$definitionId = "/subscriptions/830ef649-535d-4642-9436-356f9619c2e4/resourceGroups/rg-avd-managedapp-def/providers/Microsoft.Solutions/applicationDefinitions/avd-existing-network"
+
+az deployment group create `
+  -g "your-resource-group" `
+  --subscription "your-subscription-id" `
+  -n "avd-app-deploy" `
+  --template-spec "$definitionId"
+```
 
 **Benefits:**
 - Multi-tenant self-service deployment
 - Portal wizard with VNet and subnet dropdowns (no manual parameter entry)
 - Each user deploys to their own subscription/resources
 - Managed identity with automatic RBAC for resource access
+- Shared definition = no duplication across organizations
 
 ### Option 2: ARM Template Deployment
 
-Deploy directly from GitHub ARM template:
+Deploy directly from GitHub ARM template with portal form:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fmaster%2Finfra%2FcreateUiDefinition.json)
 
-**Note:** Requires manual parameter entry; VNet/subnet selection via text fields.
+**Note:** Requires parameter form entry; portal UI varies by template version.
 
 ---
 
@@ -64,29 +113,91 @@ az bicep build --file infra/managedapp/mainTemplate.bicep --outfile infra/manage
 az bicep build --file infra/managedapp/deployDefinition.bicep --outfile infra/managedapp/dist/deployDefinition.json
 
 # 3. Create new app.zip package
-$files = @(
-  'infra/managedapp/dist/mainTemplate.json',
-  'infra/managedapp/dist/createUiDefinition.json'
-) | ForEach-Object { Get-Item $_ }
-Compress-Archive -Path $files -DestinationPath 'infra/managedapp/dist/app.zip' -Force
+cd infra/managedapp/dist
+zip -r app.zip mainTemplate.json createUiDefinition.json
+cd ../../..
 
 # 4. Upload app.zip to your blob storage or GitHub release
-# 5. Deploy managedApplicationDefinition
-$packageUri = "https://your-storage-account.blob.core.windows.net/container/app.zip"
+# 5. Deploy managedApplicationDefinition to shared subscription
+PACKAGE_URI="https://your-storage-account.blob.core.windows.net/container/app.zip"
+PRINCIPAL_ID="$(az ad signed-in-user show --query id -o tsv)"
+
+az group create -n rg-avd-managedapp-def -l westus3
+
 az deployment group create \
-  -g <your-definition-rg> \
+  -g rg-avd-managedapp-def \
   --template-file infra/managedapp/deployDefinition.bicep \
-  --parameters packageFileUri="$packageUri" principalId="<your-principal-id>"
+  --parameters \
+    managedApplicationDefinitionName='avd-existing-network' \
+    definitionDisplayName='Azure Virtual Desktop + ALZ' \
+    packageFileUri="$PACKAGE_URI" \
+    principalId="$PRINCIPAL_ID"
+```
+
+### Deploying a Managed Application Instance
+
+Once the managed application definition is published, users can deploy instances:
+
+**Using Azure CLI:**
+```bash
+# Get the definition resource ID (from shared subscription)
+DEFINITION_ID="/subscriptions/{definition-subscription}/resourceGroups/rg-avd-managedapp-def/providers/Microsoft.Solutions/applicationDefinitions/avd-existing-network"
+
+# Deploy to your subscription
+az group create -n rg-avd-prod -l westus3
+
+az deployment group create \
+  -g rg-avd-prod \
+  -n "avd-deployment" \
+  --template-spec "$DEFINITION_ID" \
+  --parameters \
+    hostPoolName="avd-hostpool" \
+    instanceCount=3 \
+    vmSize="Standard_D2s_v3" \
+    deliveryMode="PooledDesktopAndRemoteApp" \
+    adminUsername="azureuser" \
+    adminPassword="<SecurePassword>" \
+    existingVnetName="my-vnet" \
+    existingVnetResourceGroupName="my-vnet-rg" \
+    sessionHostSubnetName="avd-subnet" \
+    privateEndpointSubnetName="pe-subnet"
+```
+
+**Using PowerShell:**
+```powershell
+$definitionId = "/subscriptions/{definition-subscription}/resourceGroups/rg-avd-managedapp-def/providers/Microsoft.Solutions/applicationDefinitions/avd-existing-network"
+
+az group create -n rg-avd-prod -l westus3
+
+az deployment group create `
+  -g rg-avd-prod `
+  -n "avd-deployment" `
+  --template-spec "$definitionId" `
+  --parameters `
+    hostPoolName="avd-hostpool" `
+    instanceCount=3 `
+    vmSize="Standard_D2s_v3" `
+    deliveryMode="PooledDesktopAndRemoteApp" `
+    adminUsername="azureuser" `
+    adminPassword="<SecurePassword>" `
+    existingVnetName="my-vnet" `
+    existingVnetResourceGroupName="my-vnet-rg" `
+    sessionHostSubnetName="avd-subnet" `
+    privateEndpointSubnetName="pe-subnet"
 ```
 
 ### Multi-Tenant Deployment
 
-To enable users in other Azure AD tenants to deploy:
+To enable users in other Azure AD tenants to deploy from a shared published definition:
 
-1. **Publish in a shared subscription** managed by your organization
-2. **Generate Deploy button** with the published `applicationDefinitionId`
-3. **Share link** — users authenticate with their own credentials
+1. **Publish definition in shared subscription** (steps above)
+2. **Share the definition resource ID** with other organizations:
+   ```
+   /subscriptions/{definition-subscription}/resourceGroups/rg-avd-managedapp-def/providers/Microsoft.Solutions/applicationDefinitions/avd-existing-network
+   ```
+3. **Users authenticate** with their own Azure credentials
 4. **Each user deploys** to their own subscription with their own resources
+5. **Managed app resources** (Host Pool, Session Hosts, FSLogix storage) remain in user's subscription and are owned by them
 
 No cross-tenant permissions needed — each user manages their own deployed resources independently.
 
