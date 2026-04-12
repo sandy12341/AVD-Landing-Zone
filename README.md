@@ -8,10 +8,9 @@ Production-ready Azure Virtual Desktop deployment with Landing Zone architecture
 
 Click the button below for a guided deployment with dynamic VNet and subnet selection:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fdad45dd%2Finfra%2Fmanagedapp%2Fdist%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2Fdad45dd%2Finfra%2Fmanagedapp%2FcreateUiDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2F7d5533b%2Finfra%2Fmanagedapp%2Fdist%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fsandy12341%2FAVD-Landing-Zone%2F7d5533b%2Finfra%2Fmanagedapp%2FcreateUiDefinition.json)
 
-**Pinned to fix commit `dad45dd` to avoid stale portal/template caching.**
-
+**Pinned to commit `7d5533b`.**
 **What You Get:**
 - Multi-step portal wizard (5 steps)
 - **VNet selection dropdown** — lists all VNets in subscription
