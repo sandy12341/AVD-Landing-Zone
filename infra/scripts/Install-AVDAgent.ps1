@@ -56,7 +56,7 @@ function Download-WithFallback {
                 $msg = $_.Exception.Message
                 $isDnsFailure = ($msg -match 'remote name could not be resolved' -or $msg -match 'NameResolutionFailure' -or $msg -match 'DNS')
                 if ($isDnsFailure -and -not $dnsFallbackApplied -and $attempt -eq 1) {
-                    Write-Output "DNS failure detected for $uri — injecting Azure DNS fallback and retrying..."
+                    Write-Output "DNS failure detected for $uri - injecting Azure DNS fallback and retrying..."
                     Ensure-AzureDnsFallback
                     $dnsFallbackApplied = $true
                     # continue loop to attempt == 2
@@ -68,7 +68,8 @@ function Download-WithFallback {
         }
     }
 
-    throw "Failed to download $ArtifactName. Attempts:`n$($errors -join "`n")"
+    $errorsJoined = ($errors -join [Environment]::NewLine)
+    throw ("Failed to download {0}. Attempts:{1}{2}" -f $ArtifactName, [Environment]::NewLine, $errorsJoined)
 }
 
 $bootLoaderUris = @(
