@@ -108,7 +108,7 @@
               "allowedValues": [
                 {
                   "label": "Legacy pooled desktop",
-                  "value": ""
+                  "value": "LegacyPooledDesktop"
                 },
                 {
                   "label": "Personal Desktop",
@@ -207,7 +207,7 @@
             "label": "Storage account name",
             "visible": "[steps('storageMonitoring').deployFSLogix]",
             "constraints": {
-              "required": true,
+              "required": "[steps('storageMonitoring').deployFSLogix]",
               "regex": "^[a-z0-9]{3,24}$",
               "validationMessage": "Use 3-24 lowercase letters or digits."
             }
@@ -265,7 +265,7 @@
             "visible": "[or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp'))]",
             "toolTip": "Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments.",
             "constraints": {
-              "required": true
+              "required": "[or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp'))]"
             }
           }
         ]
@@ -278,7 +278,7 @@
       "environment": "[basics('environment')]",
       "sessionHostCount": "[steps('instanceDetails').sessionHostCount]",
       "vmSize": "[steps('instanceDetails').vmSize]",
-      "avdMode": "[steps('instanceDetails').avdMode]",
+      "avdMode": "[if(equals(steps('instanceDetails').avdMode, 'LegacyPooledDesktop'), '', steps('instanceDetails').avdMode)]",
       "hostPoolType": "[steps('instanceDetails').hostPoolType]",
       "hostPoolName": "[steps('instanceDetails').hostPoolName]",
       "existingVnetName": "[last(split(steps('networking').selectedVnet, '/'))]",
