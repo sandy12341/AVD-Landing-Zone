@@ -59,6 +59,8 @@ param deploymentInstanceSeed string
 // Derive a deployment-unique computer name (max 15 chars) to avoid stale Entra device hostname collisions.
 var computerNamePrefix = take(replace(replace(vmNamePrefix, 'vm-', ''), '-', ''), 10)
 var computerNameSeed = take(uniqueString(resourceGroup().id, deploymentInstanceSeed), 4)
+var domainJoinUserEffective = contains(domainJoinUsername, '\\') || contains(domainJoinUsername, '@') ? domainJoinUsername : '${domainJoinUsername}@${domainFqdn}'
+var domainJoinOuPathNormalized = empty(domainJoinOuPath) ? '' : replace(domainJoinOuPath, ', ', ',')
 
 // Embed install script content at compile time to avoid runtime dependency on
 // external DNS resolution for raw.githubusercontent.com.
@@ -184,8 +186,8 @@ resource hybridDomainJoin 'Microsoft.Compute/virtualMachines/extensions@2024-07-
       autoUpgradeMinorVersion: true
       settings: {
         Name: domainFqdn
-        User: domainJoinUsername
-        OUPath: domainJoinOuPath
+        User: domainJoinUserEffective
+        OUPath: domainJoinOuPathNormalized
         Restart: true
         Options: 3
       }

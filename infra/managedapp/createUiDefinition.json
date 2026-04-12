@@ -300,7 +300,9 @@
             "defaultValue": "",
             "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
             "constraints": {
-              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]"
+              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+              "regex": "^(?=.{3,255}$)(?!-)(?:[A-Za-z0-9-]{1,63}\\.)+[A-Za-z]{2,63}$",
+              "validationMessage": "Use a valid domain FQDN such as cloudaigeek.com."
             }
           },
           {
@@ -310,7 +312,9 @@
             "defaultValue": "",
             "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
             "constraints": {
-              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]"
+              "required": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+              "regex": "^([^\\\\\\s]+\\\\[^\\\\\\s]+|[^@\\s]+@[^@\\s]+|[^\\s]+)$",
+              "validationMessage": "Use DOMAIN\\username or username@domain. Plain username is allowed and will be normalized automatically."
             }
           },
           {
@@ -333,7 +337,9 @@
             "toolTip": "Example: OU=AVD,DC=contoso,DC=com",
             "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
             "constraints": {
-              "required": false
+              "required": false,
+              "regex": "^$|^(?=.{1,1024}$)(?:OU=[^,=]+,)*(?:DC=[^,=]+,)*DC=[^,=]+$",
+              "validationMessage": "Use distinguished name format such as OU=AVD,DC=contoso,DC=com (or leave blank)."
             }
           }
         ]
