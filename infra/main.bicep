@@ -180,6 +180,9 @@ resource remoteAppGroup 'Microsoft.DesktopVirtualization/applicationGroups@2024-
 resource desktopAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId) && publishDesktop) {
   name: guid(resourceGroup().id, desktopAppGroupName, avdUserObjectId, '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
   scope: desktopAppGroup
+  dependsOn: [
+    hostPool
+  ]
   properties: {
     principalId: avdUserObjectId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
@@ -191,6 +194,9 @@ resource desktopAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01'
 resource remoteAppAvdUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(avdUserObjectId) && publishRemoteApps) {
   name: guid(resourceGroup().id, remoteAppGroupName, avdUserObjectId, '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')
   scope: remoteAppGroup
+  dependsOn: [
+    hostPool
+  ]
   properties: {
     principalId: avdUserObjectId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')

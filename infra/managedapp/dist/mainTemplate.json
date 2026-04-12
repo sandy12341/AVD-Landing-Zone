@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.3.12046",
-      "templateHash": "15727540130197252745"
+      "templateHash": "13314292678495989240"
     }
   },
   "parameters": {
@@ -191,7 +191,10 @@
         "principalId": "[parameters('avdUserObjectId')]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]"
+      ]
     },
     {
       "condition": "[and(not(empty(parameters('avdUserObjectId'))), variables('publishRemoteApps'))]",
@@ -203,7 +206,10 @@
         "principalId": "[parameters('avdUserObjectId')]",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
         "principalType": "User"
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-hostpool')]"
+      ]
     },
     {
       "condition": "[not(empty(parameters('avdUserObjectId')))]",
