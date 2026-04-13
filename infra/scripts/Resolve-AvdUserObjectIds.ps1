@@ -23,14 +23,31 @@ if ($upns.Count -eq 0) {
   return
 }
 
-if ([string]::IsNullOrWhiteSpace($env:TENANT_ID) -or [string]::IsNullOrWhiteSpace($env:CLIENT_ID) -or [string]::IsNullOrWhiteSpace($env:CLIENT_SECRET)) {
-  throw 'UPN resolution is enabled but resolver credentials are missing. Provide tenant ID, client ID, and client secret.'
+if ([string]::IsNullOrWhiteSpace($env:TENANT_ID) -or [string]::IsNullOrWhiteSpace($env:CLIENT_ID)) {
+  throw 'UPN resolution is enabled but resolver credentials are missing. Provide tenant ID and client ID.'
+}
+
+# Determine which secret source to use
+$clientSecret = $null
+if (-not [string]::IsNullOrWhiteSpace($env:CLIENT_SECRET)) {
+  $clientSecret = $env:CLIENT_SECRET
+} elseif (-not [string]::IsNullOrWhiteSpace($env:KEYVAULT_ID) -and -not [string]::IsNullOrWhiteSpace($env:KEYVAULT_SECRET_NAME)) {
+  # Fetch secret from Key Vault using deployment script's managed identity
+  $vaultName = ($env:KEYVAULT_ID -split '/')[-1]
+  $secretResp = az keyvault secret show --vault-name $vaultName --name $env:KEYVAULT_SECRET_NAME --query 'value' -o tsv 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    $clientSecret = $secretResp
+  } else {
+    throw "Failed to retrieve secret '$($env:KEYVAULT_SECRET_NAME)' from Key Vault '$vaultName'. Verify the deployment script managed identity has Key Vault Reader permissions."
+  }
+} else {
+  throw 'UPN resolution is enabled but no client secret source provided. Provide CLIENT_SECRET or KEYVAULT_ID + KEYVAULT_SECRET_NAME.'
 }
 
 $tokenResponse = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$($env:TENANT_ID)/oauth2/v2.0/token" -ContentType 'application/x-www-form-urlencoded' -Body @{
   client_id     = $env:CLIENT_ID
   scope         = 'https://graph.microsoft.com/.default'
-  client_secret = $env:CLIENT_SECRET
+  client_secret = $clientSecret
   grant_type    = 'client_credentials'
 }
 

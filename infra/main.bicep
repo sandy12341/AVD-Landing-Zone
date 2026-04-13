@@ -100,9 +100,15 @@ param resolverTenantId string = tenant().tenantId
 @description('Application (client) ID of the pre-provisioned resolver identity.')
 param resolverClientId string = ''
 
-@description('Client secret for the resolver identity.')
+@description('Client secret for the resolver identity (DirectInput source).')
 @secure()
 param resolverClientSecret string = ''
+
+@description('Key Vault resource ID containing the resolver client secret (KeyVault source).')
+param resolverKeyVaultId string = ''
+
+@description('Secret name in Key Vault for the resolver client secret (KeyVault source).')
+param resolverKeyVaultSecretName string = ''
 
 @description('RemoteApp definitions used when avdMode publishes RemoteApps. Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments.')
 param remoteApps array = []
@@ -217,26 +223,40 @@ resource resolveAvdUserObjectIds 'Microsoft.Resources/deploymentScripts@2023-08-
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
     retentionInterval: 'P1D'
-    forceUpdateTag: uniqueString(avdUserUpns, resolverClientId)
+    forceUpdateTag: uniqueString(avdUserUpns, resolverClientId, resolverKeyVaultId, resolverKeyVaultSecretName)
     scriptContent: loadTextContent('scripts/Resolve-AvdUserObjectIds.ps1')
-    environmentVariables: [
-      {
-        name: 'UPN_LIST'
-        value: avdUserUpns
-      }
-      {
-        name: 'TENANT_ID'
-        value: resolverTenantId
-      }
-      {
-        name: 'CLIENT_ID'
-        value: resolverClientId
-      }
-      {
-        name: 'CLIENT_SECRET'
-        secureValue: resolverClientSecret
-      }
-    ]
+    environmentVariables: concat(
+      [
+        {
+          name: 'UPN_LIST'
+          value: avdUserUpns
+        }
+        {
+          name: 'TENANT_ID'
+          value: resolverTenantId
+        }
+        {
+          name: 'CLIENT_ID'
+          value: resolverClientId
+        }
+      ],
+      empty(resolverClientSecret) ? [] : [
+        {
+          name: 'CLIENT_SECRET'
+          secureValue: resolverClientSecret
+        }
+      ],
+      empty(resolverKeyVaultId) ? [] : [
+        {
+          name: 'KEYVAULT_ID'
+          value: resolverKeyVaultId
+        }
+        {
+          name: 'KEYVAULT_SECRET_NAME'
+          value: resolverKeyVaultSecretName
+        }
+      ]
+    )
   }
 }
 
