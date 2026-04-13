@@ -218,6 +218,9 @@ resource resolveAvdUserObjectIds 'Microsoft.Resources/deploymentScripts@2023-08-
   name: resolverScriptName
   location: location
   kind: 'AzurePowerShell'
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     azPowerShellVersion: '11.5'
     timeout: 'PT10M'
