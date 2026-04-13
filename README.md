@@ -26,8 +26,31 @@ Click the button below for a guided deployment with dynamic VNet and subnet sele
 5. Networking: Select VNet and subnets from dropdowns
 6. AVD Config: Delivery mode (Desktop/RemoteApp/Both)  
 7. Storage & Monitoring: FSLogix and Log Analytics options
-8. Access: (Optional) User object ID for RBAC assignment
+8. Access: (Optional) User object IDs or UPN-based resolver flow for RBAC assignment
 9. Review and create
+
+### Resolver Identity (UPN -> Object ID)
+
+The deployment now supports resolving UPN values (for example `cadmin@contoso.com`) to Entra Object IDs during deployment by using a pre-provisioned resolver app registration.
+
+**When to use this:**
+- Use direct object IDs when you already have IDs.
+- Use resolver mode when deployment users prefer entering UPNs.
+
+**One-time setup (tenant admin):**
+1. Create an Entra app registration that will act as the resolver identity.
+2. Grant Microsoft Graph application permission to read users (least privilege needed for lookup, commonly `User.Read.All` as Application permission).
+3. Grant admin consent for the permission.
+4. Create a client secret (or certificate; current template uses client secret input).
+
+**Deployment inputs used by resolver mode:**
+- `resolveAvdUsersFromUpns`: `true`
+- `avdUserUpns`: comma/newline-separated UPNs
+- `resolverTenantId`: tenant GUID containing the app registration
+- `resolverClientId`: app (client) ID of resolver app
+- `resolverClientSecret`: resolver app client secret (secure input)
+
+If resolver mode is enabled, the deployment resolves UPNs first and then applies the same AVD role assignments as object-ID mode.
 
 **Managed App Details:**
 - **Subscription:** `830ef649-535d-4642-9436-356f9619c2e4`
@@ -254,7 +277,7 @@ No cross-tenant permissions needed — each user manages their own deployed reso
 - **Networking**: Uses an existing VNet and existing subnets selected at deployment time through the portal wizard
 - **Monitoring**: Log Analytics workspace for diagnostics
 - **Application Publishing**: Desktop app group, RemoteApp app group, or both from the same template
-- **Access Assignment**: When `avdUserObjectId` is provided, the template assigns `Desktop Virtualization User` on the published app groups and `Virtual Machine User Login` on the resource group
+- **Access Assignment**: When `avdUserObjectIds` is provided, the template assigns `Desktop Virtualization User` on published app groups and `Virtual Machine User Login` on the resource group (EntraID mode). Optional resolver mode can accept UPNs and resolve them at deployment time.
 - **Security**: TLS 1.2 enforced on storage, no shared key access, and a CSE-driven AVD agent install using a GitHub-hosted script to avoid Windows command-line length limits
 
 ## Prerequisites
