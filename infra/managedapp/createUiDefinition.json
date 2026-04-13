@@ -333,13 +333,20 @@
             }
           },
           {
+            "name": "resolveUsersFromUpn",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Resolve users from UPNs during deployment",
+            "defaultValue": false,
+            "toolTip": "Enable this to enter user UPN values and resolve them to object IDs using a pre-provisioned resolver app registration."
+          },
+          {
             "name": "entraUserObjectIds",
             "type": "Microsoft.Common.TextBox",
             "label": "Cloud identity object IDs",
             "defaultValue": "",
             "multiLine": true,
             "toolTip": "Optional. Enter one Entra Object ID per line (or comma-separated) to grant AVD access when EntraID authentication is selected.",
-            "visible": "[equals(steps('authentication').authenticationType, 'EntraID')]",
+            "visible": "[and(equals(steps('authentication').authenticationType, 'EntraID'), not(steps('authentication').resolveUsersFromUpn))]",
             "constraints": {
               "required": false,
               "regex": "^\\s*$|^\\s*[0-9a-fA-F-]{36}(\\s*[,\\n]\\s*[0-9a-fA-F-]{36})*\\s*$",
@@ -353,11 +360,73 @@
             "defaultValue": "",
             "multiLine": true,
             "toolTip": "Optional. Enter object IDs for hybrid-synced users to grant AVD access when HybridJoin is selected.",
-            "visible": "[equals(steps('authentication').authenticationType, 'HybridJoin')]",
+            "visible": "[and(equals(steps('authentication').authenticationType, 'HybridJoin'), not(steps('authentication').resolveUsersFromUpn))]",
             "constraints": {
               "required": false,
               "regex": "^\\s*$|^\\s*[0-9a-fA-F-]{36}(\\s*[,\\n]\\s*[0-9a-fA-F-]{36})*\\s*$",
               "validationMessage": "Use one or more GUID object IDs separated by commas or new lines."
+            }
+          },
+          {
+            "name": "entraUserUpns",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Cloud user UPNs",
+            "defaultValue": "",
+            "multiLine": true,
+            "toolTip": "Enter one UPN per line (or comma-separated), for example cadmin@contoso.com.",
+            "visible": "[and(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').resolveUsersFromUpn)]",
+            "constraints": {
+              "required": "[and(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').resolveUsersFromUpn)]"
+            }
+          },
+          {
+            "name": "hybridUserUpns",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Hybrid user UPNs",
+            "defaultValue": "",
+            "multiLine": true,
+            "toolTip": "Enter one UPN per line (or comma-separated) for hybrid synced users.",
+            "visible": "[and(equals(steps('authentication').authenticationType, 'HybridJoin'), steps('authentication').resolveUsersFromUpn)]",
+            "constraints": {
+              "required": "[and(equals(steps('authentication').authenticationType, 'HybridJoin'), steps('authentication').resolveUsersFromUpn)]"
+            }
+          },
+          {
+            "name": "resolverTenantId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Resolver tenant ID",
+            "defaultValue": "[subscription().tenantId]",
+            "toolTip": "Tenant ID where the resolver app registration exists.",
+            "visible": "[steps('authentication').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('authentication').resolveUsersFromUpn]",
+              "regex": "^[0-9a-fA-F-]{36}$",
+              "validationMessage": "Use a valid tenant GUID."
+            }
+          },
+          {
+            "name": "resolverClientId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Resolver client ID",
+            "defaultValue": "",
+            "toolTip": "Application (client) ID of your pre-provisioned resolver app registration.",
+            "visible": "[steps('authentication').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('authentication').resolveUsersFromUpn]",
+              "regex": "^[0-9a-fA-F-]{36}$",
+              "validationMessage": "Use a valid application GUID."
+            }
+          },
+          {
+            "name": "resolverClientSecret",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Resolver client secret",
+              "confirmPassword": "Confirm resolver client secret"
+            },
+            "visible": "[steps('authentication').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('authentication').resolveUsersFromUpn]"
             }
           }
         ]
@@ -387,7 +456,12 @@
       "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
       "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
       "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",
-      "avdUserObjectIds": "[if(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').entraUserObjectIds, steps('authentication').hybridUserObjectIds)]",
+      "avdUserObjectIds": "[if(steps('authentication').resolveUsersFromUpn, '', if(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').entraUserObjectIds, steps('authentication').hybridUserObjectIds))]",
+      "resolveAvdUsersFromUpns": "[steps('authentication').resolveUsersFromUpn]",
+      "avdUserUpns": "[if(steps('authentication').resolveUsersFromUpn, if(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').entraUserUpns, steps('authentication').hybridUserUpns), '')]",
+      "resolverTenantId": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverTenantId, '')]",
+      "resolverClientId": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverClientId, '')]",
+      "resolverClientSecret": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverClientSecret, '')]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }

@@ -80,6 +80,22 @@ param hostPoolName string
 @description('Comma or newline separated Entra Object IDs to grant AVD access. Leave empty to skip role assignments.')
 param avdUserObjectIds string = ''
 
+@description('When true, resolve UPN values to Entra Object IDs during deployment using a pre-provisioned resolver application identity.')
+param resolveAvdUsersFromUpns bool = false
+
+@description('Comma or newline separated UPNs to resolve when resolveAvdUsersFromUpns is enabled.')
+param avdUserUpns string = ''
+
+@description('Tenant ID used for resolver identity token acquisition.')
+param resolverTenantId string = tenant().tenantId
+
+@description('Application (client) ID of the pre-provisioned resolver identity.')
+param resolverClientId string = ''
+
+@description('Client secret for the resolver identity.')
+@secure()
+param resolverClientSecret string = ''
+
 @description('RemoteApp definitions used when avdMode publishes RemoteApps. Each item must include name and filePath and can optionally include friendlyName, description, commandLineSetting, and commandLineArguments.')
 param remoteApps array = []
 
@@ -97,6 +113,8 @@ var existingVnetId = resourceId(existingVnetResourceGroupName, 'Microsoft.Networ
 var sessionHostSubnetId = resourceId(existingVnetResourceGroupName, 'Microsoft.Network/virtualNetworks/subnets', existingVnetName, sessionHostSubnetName)
 var privateEndpointSubnetId = resourceId(existingVnetResourceGroupName, 'Microsoft.Network/virtualNetworks/subnets', existingVnetName, privateEndpointSubnetName)
 var normalizedAvdUserObjectIds = [for oid in split(replace(replace(avdUserObjectIds, '\r\n', ','), '\n', ','), ','): trim(oid)]
+var shouldResolveAvdUsersFromUpns = resolveAvdUsersFromUpns && length(trim(replace(replace(replace(avdUserUpns, '\r', ''), '\n', ''), ',', ''))) > 0
+var resolverScriptName = 'resolve-avd-users-${uniqueString(resourceGroup().id, deployment().name)}'
 var tags = {
   Environment: environment
   Project: 'AVD-Landing-Zone'
@@ -160,6 +178,52 @@ module monitoring '../modules/monitoring.bicep' = if (deployMonitoring) {
   }
 }
 
+resource resolveAvdUserObjectIds 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (shouldResolveAvdUsersFromUpns) {
+  name: resolverScriptName
+  location: location
+  kind: 'AzurePowerShell'
+  properties: {
+    azPowerShellVersion: '11.5'
+    timeout: 'PT10M'
+    cleanupPreference: 'OnSuccess'
+    retentionInterval: 'P1D'
+    forceUpdateTag: uniqueString(avdUserUpns, resolverClientId)
+    scriptContent: loadTextContent('../scripts/Resolve-AvdUserObjectIds.ps1')
+    environmentVariables: [
+      {
+        name: 'UPN_LIST'
+        value: avdUserUpns
+      }
+      {
+        name: 'TENANT_ID'
+        value: resolverTenantId
+      }
+      {
+        name: 'CLIENT_ID'
+        value: resolverClientId
+      }
+      {
+        name: 'CLIENT_SECRET'
+        secureValue: resolverClientSecret
+      }
+    ]
+  }
+}
+
+var resolvedAvdUserObjectIdsCsv = shouldResolveAvdUsersFromUpns ? string(resolveAvdUserObjectIds!.properties.outputs.objectIdsCsv) : ''
+
+module resolvedUpnRoleAssignments '../modules/avdResolvedRoleAssignments.bicep' = if (shouldResolveAvdUsersFromUpns) {
+  name: 'resolved-upn-role-assignments'
+  params: {
+    desktopAppGroupName: desktopAppGroupName
+    remoteAppGroupName: remoteAppGroupName
+    publishDesktop: publishDesktop
+    publishRemoteApps: publishRemoteApps
+    authenticationType: authenticationType
+    avdUserObjectIdsCsv: resolvedAvdUserObjectIdsCsv
+  }
+}
+
 resource desktopAppGroup 'Microsoft.DesktopVirtualization/applicationGroups@2024-04-08-preview' existing = if (publishDesktop) {
   name: desktopAppGroupName
 }
@@ -214,4 +278,4 @@ output sessionHostVmNames array = sessionHosts.outputs.vmNames
 output fslogixStorageAccount string = deployFSLogix ? fslogix!.outputs.storageAccountName : 'N/A'
 output logAnalyticsWorkspace string = deployMonitoring ? monitoring!.outputs.workspaceName : 'N/A'
 output effectiveAvdMode string = effectiveAvdMode
-output avdRolesAssigned bool = length(trim(replace(replace(replace(avdUserObjectIds, '\r', ''), '\n', ''), ',', ''))) > 0
+output avdRolesAssigned bool = length(trim(replace(replace(replace(avdUserObjectIds, '\r', ''), '\n', ''), ',', ''))) > 0 || shouldResolveAvdUsersFromUpns

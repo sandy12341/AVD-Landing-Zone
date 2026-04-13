@@ -229,16 +229,72 @@
             }
           },
           {
+            "name": "resolveUsersFromUpn",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Resolve users from UPNs during deployment",
+            "defaultValue": false,
+            "toolTip": "Enable this to enter UPN values that are resolved to object IDs by a pre-provisioned resolver app registration."
+          },
+          {
             "name": "avdUserObjectIds",
             "type": "Microsoft.Common.TextBox",
             "label": "Optional AVD user object IDs",
             "defaultValue": "",
             "multiLine": true,
             "toolTip": "Leave blank to skip automatic end-user role assignments. Enter one or more Entra Object IDs, separated by commas or new lines.",
+            "visible": "[not(steps('access').resolveUsersFromUpn)]",
             "constraints": {
               "required": false,
               "regex": "^\\s*$|^\\s*[0-9a-fA-F-]{36}(\\s*[,\\n]\\s*[0-9a-fA-F-]{36})*\\s*$",
               "validationMessage": "Use one or more GUID object IDs separated by commas or new lines."
+            }
+          },
+          {
+            "name": "avdUserUpns",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Optional AVD user UPNs",
+            "defaultValue": "",
+            "multiLine": true,
+            "toolTip": "Enter one UPN per line (or comma-separated), for example cadmin@contoso.com.",
+            "visible": "[steps('access').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('access').resolveUsersFromUpn]"
+            }
+          },
+          {
+            "name": "resolverTenantId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Resolver tenant ID",
+            "defaultValue": "[subscription().tenantId]",
+            "visible": "[steps('access').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('access').resolveUsersFromUpn]",
+              "regex": "^[0-9a-fA-F-]{36}$",
+              "validationMessage": "Use a valid tenant GUID."
+            }
+          },
+          {
+            "name": "resolverClientId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Resolver client ID",
+            "defaultValue": "",
+            "visible": "[steps('access').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('access').resolveUsersFromUpn]",
+              "regex": "^[0-9a-fA-F-]{36}$",
+              "validationMessage": "Use a valid application GUID."
+            }
+          },
+          {
+            "name": "resolverClientSecret",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Resolver client secret",
+              "confirmPassword": "Confirm resolver client secret"
+            },
+            "visible": "[steps('access').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('access').resolveUsersFromUpn]"
             }
           },
           {
@@ -274,7 +330,12 @@
       "deployFSLogix": "[steps('storageMonitoring').deployFSLogix]",
       "storageAccountName": "[steps('storageMonitoring').storageAccountName]",
       "deployMonitoring": "[steps('storageMonitoring').deployMonitoring]",
-      "avdUserObjectIds": "[steps('access').avdUserObjectIds]",
+      "avdUserObjectIds": "[if(steps('access').resolveUsersFromUpn, '', steps('access').avdUserObjectIds)]",
+      "resolveAvdUsersFromUpns": "[steps('access').resolveUsersFromUpn]",
+      "avdUserUpns": "[if(steps('access').resolveUsersFromUpn, steps('access').avdUserUpns, '')]",
+      "resolverTenantId": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverTenantId, '')]",
+      "resolverClientId": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverClientId, '')]",
+      "resolverClientSecret": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverClientSecret, '')]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }

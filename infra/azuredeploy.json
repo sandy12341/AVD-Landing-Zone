@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.30.3.12046",
-      "templateHash": "13061862659949070680"
+      "templateHash": "7832690397998740872"
     }
   },
   "parameters": {
@@ -187,6 +187,41 @@
         "description": "Comma or newline separated Entra Object IDs to grant AVD access. Leave empty to skip role assignments."
       }
     },
+    "resolveAvdUsersFromUpns": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "When true, resolve UPN values to Entra Object IDs during deployment using a pre-provisioned resolver application identity."
+      }
+    },
+    "avdUserUpns": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Comma or newline separated UPNs to resolve when resolveAvdUsersFromUpns is enabled."
+      }
+    },
+    "resolverTenantId": {
+      "type": "string",
+      "defaultValue": "[tenant().tenantId]",
+      "metadata": {
+        "description": "Tenant ID used for resolver identity token acquisition."
+      }
+    },
+    "resolverClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Application (client) ID of the pre-provisioned resolver identity."
+      }
+    },
+    "resolverClientSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Client secret for the resolver identity."
+      }
+    },
     "remoteApps": {
       "type": "array",
       "defaultValue": [],
@@ -210,6 +245,7 @@
         "input": "[trim(split(replace(replace(parameters('avdUserObjectIds'), '\r\n', ','), '\n', ','), ',')[copyIndex('normalizedAvdUserObjectIds')])]"
       }
     ],
+    "$fxv#0": "$ErrorActionPreference = 'Stop'\r\n\r\nfunction Get-NormalizedItems {\r\n  param(\r\n    [string] $Raw\r\n  )\r\n\r\n  if ([string]::IsNullOrWhiteSpace($Raw)) {\r\n    return @()\r\n  }\r\n\r\n  return ($Raw -split '[,\\r\\n]') |\r\n    ForEach-Object { $_.Trim() } |\r\n    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }\r\n}\r\n\r\n$upns = Get-NormalizedItems -Raw $env:UPN_LIST\r\n\r\nif ($upns.Count -eq 0) {\r\n  $DeploymentScriptOutputs = @{\r\n    objectIdsCsv = ''\r\n  }\r\n  return\r\n}\r\n\r\nif ([string]::IsNullOrWhiteSpace($env:TENANT_ID) -or [string]::IsNullOrWhiteSpace($env:CLIENT_ID) -or [string]::IsNullOrWhiteSpace($env:CLIENT_SECRET)) {\r\n  throw 'UPN resolution is enabled but resolver credentials are missing. Provide tenant ID, client ID, and client secret.'\r\n}\r\n\r\n$tokenResponse = Invoke-RestMethod -Method Post -Uri \"https://login.microsoftonline.com/$($env:TENANT_ID)/oauth2/v2.0/token\" -ContentType 'application/x-www-form-urlencoded' -Body @{\r\n  client_id     = $env:CLIENT_ID\r\n  scope         = 'https://graph.microsoft.com/.default'\r\n  client_secret = $env:CLIENT_SECRET\r\n  grant_type    = 'client_credentials'\r\n}\r\n\r\n$headers = @{\r\n  Authorization = \"Bearer $($tokenResponse.access_token)\"\r\n}\r\n\r\n$resolvedObjectIds = @()\r\n$missingUpns = @()\r\n\r\nforeach ($upn in $upns) {\r\n  $encodedUpn = [uri]::EscapeDataString($upn)\r\n  $requestUri = \"https://graph.microsoft.com/v1.0/users/$encodedUpn?`$select=id,userPrincipalName\"\r\n\r\n  try {\r\n    $user = Invoke-RestMethod -Method Get -Uri $requestUri -Headers $headers\r\n    if ([string]::IsNullOrWhiteSpace($user.id)) {\r\n      $missingUpns += $upn\r\n    }\r\n    else {\r\n      $resolvedObjectIds += $user.id\r\n    }\r\n  }\r\n  catch {\r\n    $missingUpns += $upn\r\n  }\r\n}\r\n\r\nif ($missingUpns.Count -gt 0) {\r\n  throw (\"Could not resolve the following UPNs: {0}\" -f ($missingUpns -join ', '))\r\n}\r\n\r\n$uniqueObjectIds = $resolvedObjectIds | Sort-Object -Unique\r\n\r\n$DeploymentScriptOutputs = @{\r\n  objectIdsCsv = ($uniqueObjectIds -join ',')\r\n}\r\n",
     "namingPrefix": "[format('{0}-{1}', parameters('deploymentPrefix'), parameters('environment'))]",
     "effectiveAvdMode": "[if(empty(parameters('avdMode')), if(equals(parameters('hostPoolType'), 'Personal'), 'PersonalDesktop', 'PooledDesktop'), parameters('avdMode'))]",
     "effectiveHostPoolType": "[if(equals(variables('effectiveAvdMode'), 'PersonalDesktop'), 'Personal', 'Pooled')]",
@@ -217,6 +253,8 @@
     "publishRemoteApps": "[or(equals(variables('effectiveAvdMode'), 'PooledRemoteApp'), equals(variables('effectiveAvdMode'), 'PooledDesktopAndRemoteApp'))]",
     "desktopAppGroupName": "[format('dag-avd-{0}', variables('namingPrefix'))]",
     "remoteAppGroupName": "[format('rag-avd-{0}', variables('namingPrefix'))]",
+    "shouldResolveAvdUsersFromUpns": "[and(parameters('resolveAvdUsersFromUpns'), greater(length(trim(replace(replace(replace(parameters('avdUserUpns'), '\r', ''), '\n', ''), ',', ''))), 0))]",
+    "resolverScriptName": "[format('resolve-avd-users-{0}', uniqueString(resourceGroup().id, deployment().name))]",
     "tags": {
       "Environment": "[parameters('environment')]",
       "Project": "AVD-Landing-Zone",
@@ -224,6 +262,40 @@
     }
   },
   "resources": [
+    {
+      "condition": "[variables('shouldResolveAvdUsersFromUpns')]",
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "[variables('resolverScriptName')]",
+      "location": "[parameters('location')]",
+      "kind": "AzurePowerShell",
+      "properties": {
+        "azPowerShellVersion": "11.5",
+        "timeout": "PT10M",
+        "cleanupPreference": "OnSuccess",
+        "retentionInterval": "P1D",
+        "forceUpdateTag": "[uniqueString(parameters('avdUserUpns'), parameters('resolverClientId'))]",
+        "scriptContent": "[variables('$fxv#0')]",
+        "environmentVariables": [
+          {
+            "name": "UPN_LIST",
+            "value": "[parameters('avdUserUpns')]"
+          },
+          {
+            "name": "TENANT_ID",
+            "value": "[parameters('resolverTenantId')]"
+          },
+          {
+            "name": "CLIENT_ID",
+            "value": "[parameters('resolverClientId')]"
+          },
+          {
+            "name": "CLIENT_SECRET",
+            "secureValue": "[parameters('resolverClientSecret')]"
+          }
+        ]
+      }
+    },
     {
       "copy": {
         "name": "desktopAvdUserRole",
@@ -1320,6 +1392,150 @@
           }
         }
       }
+    },
+    {
+      "condition": "[variables('shouldResolveAvdUsersFromUpns')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "resolved-upn-role-assignments",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "desktopAppGroupName": {
+            "value": "[variables('desktopAppGroupName')]"
+          },
+          "remoteAppGroupName": {
+            "value": "[variables('remoteAppGroupName')]"
+          },
+          "publishDesktop": {
+            "value": "[variables('publishDesktop')]"
+          },
+          "publishRemoteApps": {
+            "value": "[variables('publishRemoteApps')]"
+          },
+          "authenticationType": {
+            "value": "[parameters('authenticationType')]"
+          },
+          "avdUserObjectIdsCsv": "[if(variables('shouldResolveAvdUsersFromUpns'), createObject('value', string(reference(resourceId('Microsoft.Resources/deploymentScripts', variables('resolverScriptName')), '2023-08-01').outputs.objectIdsCsv)), createObject('value', ''))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.30.3.12046",
+              "templateHash": "8034423646232152999"
+            }
+          },
+          "parameters": {
+            "desktopAppGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Desktop app group name for AVD role assignment scope."
+              }
+            },
+            "remoteAppGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "RemoteApp app group name for AVD role assignment scope."
+              }
+            },
+            "publishDesktop": {
+              "type": "bool",
+              "metadata": {
+                "description": "True when desktop app group is published."
+              }
+            },
+            "publishRemoteApps": {
+              "type": "bool",
+              "metadata": {
+                "description": "True when remote app group is published."
+              }
+            },
+            "authenticationType": {
+              "type": "string",
+              "allowedValues": [
+                "EntraID",
+                "HybridJoin"
+              ],
+              "metadata": {
+                "description": "Authentication type for VM login role behavior."
+              }
+            },
+            "avdUserObjectIdsCsv": {
+              "type": "string",
+              "metadata": {
+                "description": "Comma or newline separated Entra Object IDs resolved from UPNs."
+              }
+            }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "normalizedAvdUserObjectIds",
+                "count": "[length(split(replace(replace(parameters('avdUserObjectIdsCsv'), '\r\n', ','), '\n', ','), ','))]",
+                "input": "[trim(split(replace(replace(parameters('avdUserObjectIdsCsv'), '\r\n', ','), '\n', ','), ',')[copyIndex('normalizedAvdUserObjectIds')])]"
+              }
+            ]
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "desktopAvdUserRole",
+                "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+              },
+              "condition": "[and(parameters('publishDesktop'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', parameters('desktopAppGroupName'))]",
+              "name": "[guid(resourceGroup().id, parameters('desktopAppGroupName'), variables('normalizedAvdUserObjectIds')[copyIndex()], '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+              "properties": {
+                "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+                "principalType": "User"
+              }
+            },
+            {
+              "copy": {
+                "name": "remoteAppAvdUserRole",
+                "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+              },
+              "condition": "[and(parameters('publishRemoteApps'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.DesktopVirtualization/applicationGroups/{0}', parameters('remoteAppGroupName'))]",
+              "name": "[guid(resourceGroup().id, parameters('remoteAppGroupName'), variables('normalizedAvdUserObjectIds')[copyIndex()], '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+              "properties": {
+                "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63')]",
+                "principalType": "User"
+              }
+            },
+            {
+              "copy": {
+                "name": "vmLoginRole",
+                "count": "[length(variables('normalizedAvdUserObjectIds'))]"
+              },
+              "condition": "[and(equals(parameters('authenticationType'), 'EntraID'), not(empty(variables('normalizedAvdUserObjectIds')[copyIndex()])))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, variables('normalizedAvdUserObjectIds')[copyIndex()], 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
+              "properties": {
+                "principalId": "[variables('normalizedAvdUserObjectIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fb879df8-f326-4884-b1cf-06f3ad86be52')]",
+                "principalType": "User"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deploymentScripts', variables('resolverScriptName'))]"
+      ]
     }
   ],
   "outputs": {
@@ -1369,7 +1585,7 @@
     },
     "avdRolesAssigned": {
       "type": "bool",
-      "value": "[greater(length(trim(replace(replace(replace(parameters('avdUserObjectIds'), '\r', ''), '\n', ''), ',', ''))), 0)]"
+      "value": "[or(greater(length(trim(replace(replace(replace(parameters('avdUserObjectIds'), '\r', ''), '\n', ''), ',', ''))), 0), variables('shouldResolveAvdUsersFromUpns'))]"
     }
   }
 }
