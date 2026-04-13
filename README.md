@@ -81,6 +81,34 @@ The script prints values you can paste into deployment parameters:
 
 Note: Admin permissions are required to grant application permission consent in Entra ID.
 
+**Deploying with resolver credentials (Portal):**
+
+Once you have the resolver app credentials from the bootstrap script, deploying with resolver mode is straightforward:
+
+1. **Run bootstrap script** and capture the output:
+   ```powershell
+   $credentials = pwsh -NoProfile -File infra/scripts/New-AvdResolverIdentity.ps1 | ConvertFrom-Json
+   Write-Output $credentials | Format-Table
+   # Output will show: resolverTenantId, resolverClientId, resolverClientSecret
+   ```
+
+2. **Click Deploy to Azure button** (at the top of this README)
+   - Portal wizard opens with 5 steps
+
+3. **At Step 5 (Access)**, enable the **"Resolve users from UPNs during deployment"** checkbox
+   - Credential fields automatically appear (previously hidden)
+   - You will see these Portal fields:
+     - **Tenant ID** (pre-filled with your subscription tenant; update if different)
+     - **Resolver Client ID** (paste from script output)
+     - **Resolver Client Secret** (paste from script output; PasswordBox — input is masked)
+     - **UPNs to resolve** (enter comma-separated or newline-separated UPNs, e.g., `user1@contoso.com, user2@contoso.com`)
+
+4. **Fill credential fields** with values from bootstrap script output and your UPN list
+
+5. **Complete the deployment** — values are passed at runtime; no parameter files are modified
+
+**Security note:** Portal credentials are passed directly to the deployment engine. They are never stored in your parameter files or persisted after deployment completes.
+
 **Managed App Details:**
 - **Subscription:** `830ef649-535d-4642-9436-356f9619c2e4`
 - **Resource Group:** `rg-avd-managedapp-def`
