@@ -95,19 +95,30 @@ Once you have the resolver app credentials from the bootstrap script, deploying 
 2. **Click Deploy to Azure button** (at the top of this README)
    - Portal wizard opens with 5 steps
 
-3. **At Step 5 (Access)**, enable the **"Resolve users from UPNs during deployment"** checkbox
+3. **At the resolver step in the wizard** (Access/Authentication), enable **"Resolve users from UPNs during deployment"**
    - Credential fields automatically appear (previously hidden)
+   - You now have two secret source options:
+     - **Enter secret now**: paste secret directly in PasswordBox (masked input)
+     - **Use Azure Key Vault secret**: select vault + secret name from dropdowns
    - You will see these Portal fields:
      - **Tenant ID** (pre-filled with your subscription tenant; update if different)
      - **Resolver Client ID** (paste from script output)
-     - **Resolver Client Secret** (paste from script output; PasswordBox — input is masked)
+     - **Resolver secret source** (Direct input or Key Vault)
+     - **Resolver Client Secret** (for Direct input path)
+     - **Resolver Key Vault** and **Resolver secret** (for Key Vault path)
      - **UPNs to resolve** (enter comma-separated or newline-separated UPNs, e.g., `user1@contoso.com, user2@contoso.com`)
 
 4. **Fill credential fields** with values from bootstrap script output and your UPN list
+  - If using Key Vault, select the vault and secret name instead of pasting the secret value
 
 5. **Complete the deployment** — values are passed at runtime; no parameter files are modified
 
 **Security note:** Portal credentials are passed directly to the deployment engine. They are never stored in your parameter files or persisted after deployment completes.
+
+**Key Vault requirements (when using Key Vault source):**
+- The selected vault must be accessible to the deploying identity.
+- The vault must allow template deployments (`enabledForTemplateDeployment`), or equivalent RBAC permissions for deployment-time secret resolution.
+- The secret value itself is not shown in the dropdown; only vault and secret metadata are listed.
 
 **Managed App Details:**
 - **Subscription:** `830ef649-535d-4642-9436-356f9619c2e4`

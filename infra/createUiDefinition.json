@@ -286,15 +286,75 @@
             }
           },
           {
+            "name": "resolverSecretSource",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Resolver secret source",
+            "defaultValue": "DirectInput",
+            "visible": "[steps('access').resolveUsersFromUpn]",
+            "constraints": {
+              "required": "[steps('access').resolveUsersFromUpn]",
+              "allowedValues": [
+                {
+                  "label": "Enter secret now",
+                  "value": "DirectInput"
+                },
+                {
+                  "label": "Use Azure Key Vault secret",
+                  "value": "KeyVault"
+                }
+              ]
+            }
+          },
+          {
+            "name": "resolverKeyVaultApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "visible": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault'))]",
+            "request": {
+              "method": "GET",
+              "path": "[concat(subscription().id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
+            }
+          },
+          {
+            "name": "resolverKeyVaultId",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Resolver Key Vault",
+            "filter": true,
+            "visible": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault'))]",
+            "constraints": {
+              "allowedValues": "[if(empty(steps('access').resolverKeyVaultApi.value), parse('[]'), map(steps('access').resolverKeyVaultApi.value, (item) => parse(concat('{\"label\":\"', item.name, ' (', last(take(split(item.id, '/'), 5)), ')\",\"value\":\"', item.id, '\"}'))))]",
+              "required": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault'))]"
+            }
+          },
+          {
+            "name": "resolverKeyVaultSecretsApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "visible": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault'))]",
+            "request": {
+              "method": "GET",
+              "path": "[if(empty(steps('access').resolverKeyVaultId), concat(subscription().id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01'), concat(steps('access').resolverKeyVaultId, '/secrets?api-version=2023-07-01'))]"
+            }
+          },
+          {
+            "name": "resolverKeyVaultSecretName",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Resolver secret",
+            "filter": true,
+            "visible": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault'))]",
+            "constraints": {
+              "allowedValues": "[if(or(empty(steps('access').resolverKeyVaultId), empty(steps('access').resolverKeyVaultSecretsApi.value)), parse('[]'), map(steps('access').resolverKeyVaultSecretsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}'))))]",
+              "required": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault'))]"
+            }
+          },
+          {
             "name": "resolverClientSecret",
             "type": "Microsoft.Common.PasswordBox",
             "label": {
               "password": "Resolver client secret",
               "confirmPassword": "Confirm resolver client secret"
             },
-            "visible": "[steps('access').resolveUsersFromUpn]",
+            "visible": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'DirectInput'))]",
             "constraints": {
-              "required": "[steps('access').resolveUsersFromUpn]"
+              "required": "[and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'DirectInput'))]"
             }
           },
           {
@@ -335,7 +395,7 @@
       "avdUserUpns": "[if(steps('access').resolveUsersFromUpn, steps('access').avdUserUpns, '')]",
       "resolverTenantId": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverTenantId, '')]",
       "resolverClientId": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverClientId, '')]",
-      "resolverClientSecret": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverClientSecret, '')]",
+      "resolverClientSecret": "[if(steps('access').resolveUsersFromUpn, if(equals(steps('access').resolverSecretSource, 'KeyVault'), createObject('reference', createObject('keyVault', createObject('id', steps('access').resolverKeyVaultId), 'secretName', steps('access').resolverKeyVaultSecretName)), steps('access').resolverClientSecret), '')]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }
