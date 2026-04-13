@@ -52,6 +52,35 @@ The deployment now supports resolving UPN values (for example `cadmin@contoso.co
 
 If resolver mode is enabled, the deployment resolves UPNs first and then applies the same AVD role assignments as object-ID mode.
 
+**Bootstrap script (recommended):**
+
+Use the helper script to create or reuse the resolver app registration, grant Graph permission, and generate a client secret:
+
+```powershell
+pwsh -NoProfile -File infra/scripts/New-AvdResolverIdentity.ps1
+```
+
+Optional flags:
+
+```powershell
+# Custom app display name, 2-year secret, and env-style output
+pwsh -NoProfile -File infra/scripts/New-AvdResolverIdentity.ps1 `
+  -DisplayName "avd-upn-resolver-prod" `
+  -SecretYears 2 `
+  -OutputFormat env
+
+# Skip admin consent (if you plan to grant it later)
+pwsh -NoProfile -File infra/scripts/New-AvdResolverIdentity.ps1 -SkipAdminConsent
+```
+
+The script prints values you can paste into deployment parameters:
+- `resolverTenantId`
+- `resolverClientId`
+- `resolverClientSecret`
+- `resolveAvdUsersFromUpns=true`
+
+Note: Admin permissions are required to grant application permission consent in Entra ID.
+
 **Managed App Details:**
 - **Subscription:** `830ef649-535d-4642-9436-356f9619c2e4`
 - **Resource Group:** `rg-avd-managedapp-def`
