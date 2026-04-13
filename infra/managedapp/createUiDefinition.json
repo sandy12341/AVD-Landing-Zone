@@ -439,22 +439,18 @@
             }
           },
           {
-            "name": "resolverKeyVaultApi",
-            "type": "Microsoft.Solutions.ArmApiControl",
-            "visible": "[and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault'))]",
-            "request": {
-              "method": "GET",
-              "path": "[concat(subscription().id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01')]"
-            }
-          },
-          {
-            "name": "resolverKeyVaultId",
-            "type": "Microsoft.Common.DropDown",
+            "name": "resolverKeyVault",
+            "type": "Microsoft.Solutions.ResourceSelector",
             "label": "Resolver Key Vault",
-            "filter": true,
+            "resourceType": "Microsoft.KeyVault/vaults",
             "visible": "[and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault'))]",
+            "options": {
+              "filter": {
+                "subscription": "onBasic",
+                "location": "all"
+              }
+            },
             "constraints": {
-              "allowedValues": "[if(empty(steps('authentication').resolverKeyVaultApi.value), parse('[]'), map(steps('authentication').resolverKeyVaultApi.value, (item) => parse(concat('{\"label\":\"', item.name, ' (', last(take(split(item.id, '/'), 5)), ')\",\"value\":\"', item.id, '\"}'))))]",
               "required": "[and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault'))]"
             }
           },
@@ -464,7 +460,7 @@
             "visible": "[and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault'))]",
             "request": {
               "method": "GET",
-              "path": "[if(empty(steps('authentication').resolverKeyVaultId), concat(subscription().id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01'), concat(steps('authentication').resolverKeyVaultId, '/secrets?api-version=2023-07-01'))]"
+              "path": "[if(empty(steps('authentication').resolverKeyVault.id), concat(subscription().id, '/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01'), concat(steps('authentication').resolverKeyVault.id, '/secrets?api-version=2023-07-01'))]"
             }
           },
           {
@@ -474,7 +470,7 @@
             "filter": true,
             "visible": "[and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault'))]",
             "constraints": {
-              "allowedValues": "[if(or(empty(steps('authentication').resolverKeyVaultId), empty(steps('authentication').resolverKeyVaultSecretsApi.value)), parse('[]'), map(steps('authentication').resolverKeyVaultSecretsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}'))))]",
+              "allowedValues": "[if(or(empty(steps('authentication').resolverKeyVault.id), empty(steps('authentication').resolverKeyVaultSecretsApi.value)), parse('[]'), map(steps('authentication').resolverKeyVaultSecretsApi.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}'))))]",
               "required": "[and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault'))]"
             }
           },
@@ -522,7 +518,7 @@
       "avdUserUpns": "[if(steps('authentication').resolveUsersFromUpn, if(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').entraUserUpns, steps('authentication').hybridUserUpns), '')]",
       "resolverTenantId": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverTenantId, '')]",
       "resolverClientId": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverClientId, '')]",
-      "resolverClientSecret": "[if(steps('authentication').resolveUsersFromUpn, if(equals(steps('authentication').resolverSecretSource, 'KeyVault'), createObject('reference', createObject('keyVault', createObject('id', steps('authentication').resolverKeyVaultId), 'secretName', steps('authentication').resolverKeyVaultSecretName)), steps('authentication').resolverClientSecret), '')]",
+      "resolverClientSecret": "[if(steps('authentication').resolveUsersFromUpn, if(and(equals(steps('authentication').resolverSecretSource, 'KeyVault'), not(empty(steps('authentication').resolverKeyVault.id)), not(empty(steps('authentication').resolverKeyVaultSecretName))), createObject('reference', createObject('keyVault', createObject('id', steps('authentication').resolverKeyVault.id, 'subscriptionId', steps('authentication').resolverKeyVault.subscriptionId), 'secretName', steps('authentication').resolverKeyVaultSecretName)), steps('authentication').resolverClientSecret), '')]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }
