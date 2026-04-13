@@ -518,7 +518,10 @@
       "avdUserUpns": "[if(steps('authentication').resolveUsersFromUpn, if(equals(steps('authentication').authenticationType, 'EntraID'), steps('authentication').entraUserUpns, steps('authentication').hybridUserUpns), '')]",
       "resolverTenantId": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverTenantId, '')]",
       "resolverClientId": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverClientId, '')]",
-      "resolverClientSecret": "[if(steps('authentication').resolveUsersFromUpn, if(and(equals(steps('authentication').resolverSecretSource, 'KeyVault'), not(empty(steps('authentication').resolverKeyVault.id)), not(empty(steps('authentication').resolverKeyVaultSecretName))), createObject('reference', createObject('keyVault', createObject('id', steps('authentication').resolverKeyVault.id), 'secretName', steps('authentication').resolverKeyVaultSecretName)), steps('authentication').resolverClientSecret), '')]",
+      "resolverSecretSource": "[if(steps('authentication').resolveUsersFromUpn, steps('authentication').resolverSecretSource, '')]",
+      "resolverKeyVaultId": "[if(and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault')), steps('authentication').resolverKeyVault.id, '')]",
+      "resolverKeyVaultSecretName": "[if(and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'KeyVault')), steps('authentication').resolverKeyVaultSecretName, '')]",
+      "resolverClientSecret": "[if(and(steps('authentication').resolveUsersFromUpn, equals(steps('authentication').resolverSecretSource, 'DirectInput')), steps('authentication').resolverClientSecret, '')]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }

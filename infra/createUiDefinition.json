@@ -391,7 +391,10 @@
       "avdUserUpns": "[if(steps('access').resolveUsersFromUpn, steps('access').avdUserUpns, '')]",
       "resolverTenantId": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverTenantId, '')]",
       "resolverClientId": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverClientId, '')]",
-      "resolverClientSecret": "[if(steps('access').resolveUsersFromUpn, if(and(equals(steps('access').resolverSecretSource, 'KeyVault'), not(empty(steps('access').resolverKeyVault.id)), not(empty(steps('access').resolverKeyVaultSecretName))), createObject('reference', createObject('keyVault', createObject('id', steps('access').resolverKeyVault.id), 'secretName', steps('access').resolverKeyVaultSecretName)), steps('access').resolverClientSecret), '')]",
+      "resolverSecretSource": "[if(steps('access').resolveUsersFromUpn, steps('access').resolverSecretSource, '')]",
+      "resolverKeyVaultId": "[if(and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault')), steps('access').resolverKeyVault.id, '')]",
+      "resolverKeyVaultSecretName": "[if(and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'KeyVault')), steps('access').resolverKeyVaultSecretName, '')]",
+      "resolverClientSecret": "[if(and(steps('access').resolveUsersFromUpn, equals(steps('access').resolverSecretSource, 'DirectInput')), steps('access').resolverClientSecret, '')]",
       "remoteApps": "[if(or(equals(steps('instanceDetails').avdMode, 'PooledRemoteApp'), equals(steps('instanceDetails').avdMode, 'PooledDesktopAndRemoteApp')), parse(steps('access').remoteAppsJson), parse('[]'))]"
     }
   }
